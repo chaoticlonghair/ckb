@@ -4,8 +4,8 @@ use crate::flat_block_body::{
 };
 use crate::{
     COLUMN_BLOCK_BODY, COLUMN_BLOCK_EPOCH, COLUMN_BLOCK_HEADER, COLUMN_BLOCK_PROPOSAL_IDS,
-    COLUMN_BLOCK_TRANSACTION_ADDRESSES, COLUMN_BLOCK_UNCLE, COLUMN_CELL_META, COLUMN_EPOCH,
-    COLUMN_EXT, COLUMN_INDEX, COLUMN_META, COLUMN_TRANSACTION_ADDR,
+    COLUMN_BLOCK_TRANSACTION_ADDRESSES, COLUMN_BLOCK_UNCLE, COLUMN_CELL_META, COLUMN_CELL_SET,
+    COLUMN_EPOCH, COLUMN_EXT, COLUMN_INDEX, COLUMN_META, COLUMN_TRANSACTION_ADDR,
 };
 use bincode::{deserialize, serialize};
 use ckb_chain_spec::consensus::Consensus;
@@ -31,7 +31,7 @@ const META_CURRENT_EPOCH_KEY: &[u8] = b"CURRENT_EPOCH";
 fn cell_store_key(tx_hash: &H256, index: u32) -> [u8; 36] {
     let mut key: [u8; 36] = [0; 36];
     key[..32].copy_from_slice(tx_hash.as_bytes());
-    key[32..36].copy_from_slice(&index.to_be_bytes());
+    key[32..36].copy_from_slice(&index.to_le_bytes());
     key
 }
 
@@ -143,6 +143,9 @@ pub trait StoreBatch {
 
     fn attach_block(&mut self, block: &Block) -> Result<(), Error>;
     fn detach_block(&mut self, block: &Block) -> Result<(), Error>;
+
+    fn insert_cell_set(&mut self, records: &[(&H256, u32)]) -> Result<(), Error>;
+    fn delete_cell_set(&mut self, records: &[(&H256, u32)]) -> Result<(), Error>;
 
     fn commit(self) -> Result<(), Error>;
 }
@@ -527,6 +530,23 @@ impl<B: DbBatch> StoreBatch for DefaultStoreBatch<B> {
 
     fn insert_current_epoch_ext(&mut self, epoch: &EpochExt) -> Result<(), Error> {
         self.insert_serialize(COLUMN_META, META_CURRENT_EPOCH_KEY, epoch)
+    }
+
+    fn insert_cell_set(&mut self, records: &[(&H256, u32)]) -> Result<(), Error> {
+        for record in records {
+            let store_key = cell_store_key(&record.0, record.1);
+            self.insert_raw(COLUMN_CELL_SET, &store_key, &[])?;
+        }
+        Ok(())
+    }
+
+    fn delete_cell_set(&mut self, records: &[(&H256, u32)]) -> Result<(), Error> {
+        for record in records {
+            let store_key = cell_store_key(&record.0, record.1);
+            // TODO failed to delete or no such key
+            self.delete(COLUMN_CELL_SET, &store_key)?;
+        }
+        Ok(())
     }
 
     fn commit(self) -> Result<(), Error> {

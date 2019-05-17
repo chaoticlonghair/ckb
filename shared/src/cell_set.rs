@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 #[derive(Default, Clone, Deserialize, Serialize)]
 pub struct CellSetDiff {
     pub old_inputs: FnvHashSet<OutPoint>,
-    pub old_outputs: FnvHashSet<H256>,
+    pub old_outputs: FnvHashMap<H256, usize>,
     pub new_inputs: FnvHashSet<OutPoint>,
     pub new_outputs: FnvHashMap<H256, (u64, u64, bool, usize)>,
 }
@@ -38,7 +38,8 @@ impl CellSetDiff {
             let tx_hash = tx.hash();
 
             self.old_inputs.extend(input_iter.cloned());
-            self.old_outputs.insert(tx_hash.to_owned());
+            self.old_outputs
+                .insert(tx_hash.to_owned(), tx.outputs().len());
         }
     }
 }
@@ -76,7 +77,7 @@ impl CellSet {
         let mut new = FnvHashMap::default();
         let mut removed = FnvHashSet::default();
 
-        for hash in &diff.old_outputs {
+        for (hash, _) in &diff.old_outputs {
             if self.inner.get(&hash).is_some() {
                 removed.insert(hash.clone());
             }
@@ -171,7 +172,7 @@ impl CellSet {
             new_outputs,
         } = diff;
 
-        old_outputs.iter().for_each(|h| {
+        old_outputs.iter().for_each(|(h, _)| {
             self.remove(h);
         });
 

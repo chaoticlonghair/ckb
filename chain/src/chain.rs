@@ -288,14 +288,6 @@ impl<CS: ChainStore + 'static> ChainService<CS> {
 
         if new_best_block {
             let tip_header = block.header().to_owned();
-            info!(
-                target: "chain",
-                "block: {}, hash: {:#x}, total_diff: {:#x}, txs: {}",
-                tip_header.number(),
-                tip_header.hash(),
-                total_difficulty,
-                block.transactions().len()
-            );
             // finalize proposal_id table change
             // then, update tx_pool
             let detached_proposal_id = chain_state.proposal_ids_finalize(tip_header.number());
@@ -303,12 +295,22 @@ impl<CS: ChainStore + 'static> ChainService<CS> {
             if new_epoch || fork.has_detached() {
                 chain_state.update_current_epoch_ext(epoch);
             }
-            chain_state.update_tip(tip_header, total_difficulty, cell_set_diff);
+            let live_cell_count =
+                chain_state.update_tip(tip_header, total_difficulty.clone(), cell_set_diff)?;
             chain_state.update_tx_pool_for_reorg(
                 fork.detached_blocks().iter(),
                 fork.attached_blocks().iter(),
                 fork.detached_proposal_id().iter(),
                 &mut txs_verify_cache,
+            );
+            info!(
+                target: "chain",
+                "block: {}, hash: {:#x}, total_diff: {:#x}, txs: {}, alive: {}",
+                block.header().number(),
+                block.header().hash(),
+                total_difficulty,
+                block.transactions().len(),
+                live_cell_count,
             );
             if log_enabled!(target: "chain", log::Level::Debug) {
                 self.print_chain(&chain_state, 10);
@@ -316,7 +318,7 @@ impl<CS: ChainStore + 'static> ChainService<CS> {
         } else {
             info!(
                 target: "chain",
-                "uncle: {}, hash: {:#x}, total_diff: {:#x}, txs: {}",
+                "uncle: {}, hash: {:#x}, total_diff: {:#x}, txs: {}, alive: -",
                 block.header().number(),
                 block.header().hash(),
                 cannon_total_difficulty,

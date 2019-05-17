@@ -15,12 +15,13 @@ use ckb_core::transaction::CellOutput;
 use ckb_core::transaction::{OutPoint, ProposalShortId, Transaction};
 use ckb_core::Cycle;
 use ckb_script::ScriptConfig;
-use ckb_store::ChainStore;
+use ckb_store::{ChainStore, StoreBatch};
 use ckb_traits::BlockMedianTimeContext;
 use ckb_util::LinkedFnvHashSet;
 use ckb_util::{FnvHashMap, FnvHashSet};
 use ckb_verification::{ContextualTransactionVerifier, TransactionVerifier};
 use dao_utils::calculate_transaction_fee;
+use failure::Error as FailureError;
 use log::{debug, trace};
 use lru_cache::LruCache;
 use numext_fixed_hash::H256;
@@ -230,10 +231,52 @@ impl<CS: ChainStore> ChainState<CS> {
         self.current_epoch_ext = epoch_ext;
     }
 
-    pub fn update_tip(&mut self, header: Header, total_difficulty: U256, txo_diff: CellSetDiff) {
+    pub fn update_tip(
+        &mut self,
+        header: Header,
+        total_difficulty: U256,
+        txo_diff: CellSetDiff,
+    ) -> Result<u64, FailureError> {
         self.tip_header = header;
         self.total_difficulty = total_difficulty;
+
+        let old_dead = txo_diff
+            .old_outputs
+            .iter()
+            .map(|(hash, len)| (0..(*len as u32)).map(move |index| (hash, index)))
+            .flatten()
+            .collect::<Vec<_>>();
+        let old_alive = txo_diff
+            .old_inputs
+            .iter()
+            .filter_map(|input| input.cell.as_ref())
+            .map(|cell| (&cell.tx_hash, cell.index))
+            .collect::<Vec<_>>();
+        let new_alive = txo_diff
+            .new_outputs
+            .iter()
+            .map(|(hash, (_, _, _, len))| (0..(*len as u32)).map(move |index| (hash, index)))
+            .flatten()
+            .collect::<Vec<_>>();
+        let new_dead = txo_diff
+            .new_inputs
+            .iter()
+            .filter_map(|input| input.cell.as_ref())
+            .map(|cell| (&cell.tx_hash, cell.index))
+            .collect::<Vec<_>>();
+
+        {
+            let mut batch = self.store.new_batch()?;
+            batch.delete_cell_set(&old_dead[..])?;
+            batch.insert_cell_set(&old_alive[..])?;
+            batch.insert_cell_set(&new_alive[..])?;
+            batch.delete_cell_set(&new_dead[..])?;
+            batch.commit()?;
+        }
+
         self.cell_set.update(txo_diff);
+
+        Ok(self.cell_set.count)
     }
 
     pub fn get_tx_with_cycles_from_pool(
