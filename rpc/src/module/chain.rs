@@ -130,57 +130,73 @@ impl<CS: ChainStore + 'static> ChainRpc for ChainRpcImpl<CS> {
         from: BlockNumber,
         to: BlockNumber,
     ) -> Result<Vec<CellOutputWithOutPoint>> {
-        let mut result = Vec::new();
-        let chain_state = self.shared.lock_chain_state();
         let from = from.0;
         let to = to.0;
         if from > to {
-            return Err(RPCError::custom(
+            Err(RPCError::custom(
                 RPCError::Invalid,
                 "from greater than to".to_owned(),
-            ));
+            ))
         } else if to - from > PAGE_SIZE {
-            return Err(RPCError::custom(
+            Err(RPCError::custom(
                 RPCError::Invalid,
                 "too large page size".to_owned(),
-            ));
-        }
+            ))
+        } else if to == from {
+            Ok(Vec::new())
+        } else {
+            let mut result = Vec::new();
 
-        for block_number in from..=to {
-            let block_hash = self.shared.block_hash(block_number);
-            if block_hash.is_none() {
-                break;
-            }
-
-            let block_hash = block_hash.unwrap();
-            let block = self
-                .shared
-                .block(&block_hash)
-                .ok_or_else(Error::internal_error)?;
-            for transaction in block.transactions() {
-                let transaction_meta = chain_state
-                    .cell_set()
-                    .get(&transaction.hash())
-                    .ok_or_else(Error::internal_error)?;
-                for (i, output) in transaction.outputs().iter().enumerate() {
-                    if output.lock.hash() == lock_hash && transaction_meta.is_dead(i) == Some(false)
-                    {
-                        result.push(CellOutputWithOutPoint {
-                            out_point: OutPoint {
-                                cell: Some(CellOutPoint {
-                                    tx_hash: transaction.hash().to_owned(),
-                                    index: Unsigned(i as u64),
-                                }),
-                                block_hash: Some(block_hash.to_owned()),
-                            },
-                            capacity: Capacity(output.capacity),
-                            lock: output.lock.clone().into(),
-                        });
-                    }
+            let mut block_hashes = Vec::with_capacity((to - from + 1) as usize);
+            for block_number in from..=to {
+                if let Some(block_hash) = self.shared.block_hash(block_number) {
+                    block_hashes.push(block_hash);
+                } else {
+                    break;
                 }
             }
+
+            let mut blocks = Vec::new();
+            for block_hash in block_hashes.iter() {
+                let block = self
+                    .shared
+                    .block(block_hash)
+                    .ok_or_else(Error::internal_error)?;
+                blocks.push(block)
+            }
+
+            {
+                let chain_state = self.shared.lock_chain_state();
+                for block in blocks.iter() {
+                    let block_hash = block.header().hash();
+                    for transaction in block.transactions() {
+                        let tx_hash = transaction.hash();
+                        for (index, output) in transaction.outputs().iter().enumerate() {
+                            let index = index as u32;
+                            if chain_state.cell_set().contains_probably(tx_hash, index)
+                                && self.shared.has_live_cell(tx_hash, index)
+                                && output.lock.hash() == lock_hash
+                            {
+                                result.push(CellOutputWithOutPoint {
+                                    out_point: OutPoint {
+                                        cell: Some(CellOutPoint {
+                                            tx_hash: tx_hash.to_owned(),
+                                            index: Unsigned(index as u64),
+                                        }),
+                                        block_hash: Some(block_hash.to_owned()),
+                                    },
+                                    capacity: Capacity(output.capacity),
+                                    lock: output.lock.clone().into(),
+                                });
+                            }
+                        }
+                    }
+                }
+                drop(chain_state);
+            }
+
+            Ok(result)
         }
-        Ok(result)
     }
 
     fn get_live_cell(&self, out_point: OutPoint) -> Result<CellWithStatus> {

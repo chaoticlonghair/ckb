@@ -121,6 +121,8 @@ pub trait ChainStore: Sync + Send {
     // Get epoch index by block hash
     fn get_block_epoch_index(&self, h256: &H256) -> Option<H256>;
 
+    fn has_live_cell(&self, tx_hash: &H256, index: u32) -> bool;
+
     fn traverse_cell_set<F>(&self, callback: F) -> Result<(), Error>
     where
         F: FnMut(&[u8]) -> Result<(), Error>;
@@ -394,6 +396,11 @@ impl<T: KeyValueDB> ChainStore for ChainKVStore<T> {
                         })
                     })
             })
+    }
+
+    fn has_live_cell(&self, tx_hash: &H256, index: u32) -> bool {
+        self.get(COLUMN_CELL_SET, CellKey::calculate(tx_hash, index).as_ref())
+            .is_some()
     }
 
     fn traverse_cell_set<F>(&self, callback: F) -> Result<(), Error>

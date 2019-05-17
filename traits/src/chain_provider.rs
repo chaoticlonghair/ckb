@@ -36,6 +36,8 @@ pub trait ChainProvider: Sync + Send {
 
     fn get_transaction(&self, hash: &H256) -> Option<(Transaction, H256)>;
 
+    fn has_live_cell(&self, tx_hash: &H256, index: u32) -> bool;
+
     fn get_ancestor(&self, base: &H256, number: BlockNumber) -> Option<Header>;
 
     fn get_block_epoch(&self, hash: &H256) -> Option<EpochExt>;

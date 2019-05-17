@@ -622,19 +622,20 @@ pub struct ChainCellSetOverlay<'a, CS> {
 impl<CS: ChainStore> CellProvider for ChainState<CS> {
     fn cell(&self, out_point: &OutPoint) -> CellStatus {
         if let Some(cell_out_point) = &out_point.cell {
-            match self.cell_set().get(&cell_out_point.tx_hash) {
-                Some(tx_meta) => match tx_meta.is_dead(cell_out_point.index as usize) {
-                    Some(false) => {
-                        let cell_meta = self
-                            .store
-                            .get_cell_meta(&cell_out_point.tx_hash, cell_out_point.index)
-                            .expect("store should be consistent with cell_set");
-                        CellStatus::live_cell(cell_meta)
-                    }
-                    Some(true) => CellStatus::Dead,
-                    None => CellStatus::Unknown,
-                },
-                None => CellStatus::Unknown,
+            if self
+                .cell_set()
+                .contains_probably(&cell_out_point.tx_hash, cell_out_point.index)
+                && self
+                    .store
+                    .has_live_cell(&cell_out_point.tx_hash, cell_out_point.index)
+            {
+                let cell_meta = self
+                    .store
+                    .get_cell_meta(&cell_out_point.tx_hash, cell_out_point.index)
+                    .expect("store should be consistent with cell_set");
+                CellStatus::live_cell(cell_meta)
+            } else {
+                CellStatus::Dead
             }
         } else {
             CellStatus::Unspecified

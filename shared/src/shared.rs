@@ -127,6 +127,10 @@ impl<CS: ChainStore> ChainProvider for Shared<CS> {
         self.store.get_transaction(hash)
     }
 
+    fn has_live_cell(&self, tx_hash: &H256, index: u32) -> bool {
+        self.store.has_live_cell(tx_hash, index)
+    }
+
     fn get_ancestor(&self, base: &H256, number: BlockNumber) -> Option<Header> {
         // if base in the main chain
         if let Some(n_number) = self.block_number(base) {
