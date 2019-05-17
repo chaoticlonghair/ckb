@@ -588,7 +588,7 @@ impl<CS: ChainStore + 'static> ChainService<CS> {
                 }
 
                 if found_error.is_some() {
-                    error!(target: "chain", "cell_set {}", serde_json::to_string(&chain_state.cell_set()).unwrap());
+                    error!(target: "chain", "{:?}", &chain_state.cell_set());
                 }
             } else {
                 cell_set_diff.push_new(b);

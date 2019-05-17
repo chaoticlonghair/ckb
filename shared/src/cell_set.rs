@@ -1,9 +1,13 @@
+use bloom_filters::{
+    BloomFilter, CountingBloomFilter, DefaultBuildHashKernels, RemovableBloomFilter,
+};
 use ckb_core::block::Block;
-use ckb_core::transaction::OutPoint;
+use ckb_core::transaction::{CellKey, OutPoint};
 use ckb_core::transaction_meta::TransactionMeta;
 use ckb_util::{FnvHashMap, FnvHashSet};
 use numext_fixed_hash::H256;
 use serde_derive::{Deserialize, Serialize};
+use std::collections::hash_map::RandomState;
 
 #[derive(Default, Clone, Deserialize, Serialize)]
 pub struct CellSetDiff {
@@ -61,16 +65,68 @@ impl<'a> CellSetOverlay<'a> {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+type CellSetFilter = CountingBloomFilter<DefaultBuildHashKernels<RandomState>>;
+
 pub struct CellSet {
     pub(crate) inner: FnvHashMap<H256, TransactionMeta>,
+    filter: CellSetFilter,
+    count: u64,
+}
+
+impl ::std::fmt::Debug for CellSet {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(
+            f,
+            "CellSet {{ count: {}, /* fields omitted */ }}",
+            self.count
+        )
+    }
 }
 
 impl CellSet {
     pub fn new() -> Self {
+        // TODO optimize scalability
+        let items_count: usize = 10_000_000;
+        let bucket_size: u8 = 7;
+        let fp_rate: f64 = 0.03;
+        let build_hash_kernels = DefaultBuildHashKernels::new(rand::random(), RandomState::new());
+        let filter =
+            CountingBloomFilter::new(items_count, bucket_size, fp_rate, build_hash_kernels);
         CellSet {
             inner: FnvHashMap::default(),
+            filter,
+            count: 0,
         }
+    }
+
+    pub(crate) fn count(&self) -> u64 {
+        self.count
+    }
+
+    pub(crate) fn insert_raw(&mut self, raw: &[u8]) {
+        let (hash, index) = CellKey::deconstruct(raw);
+        let key = (&hash, index);
+        self.filter.insert(&key);
+        self.count += 1;
+    }
+
+    pub(crate) fn insert_cells(&mut self, keys: &[(&H256, u32)]) {
+        for key in keys {
+            self.filter.insert(key);
+        }
+        self.count += keys.len() as u64;
+    }
+
+    pub(crate) fn delete_cells(&mut self, keys: &[(&H256, u32)]) {
+        for key in keys {
+            self.filter.remove(key);
+        }
+        self.count -= keys.len() as u64;
+    }
+
+    pub fn contains_probably(&self, tx_hash: &H256, index: u32) -> bool {
+        let key = (tx_hash, index);
+        self.filter.contains(&key)
     }
 
     pub fn new_overlay<'a>(&'a self, diff: &CellSetDiff) -> CellSetOverlay<'a> {

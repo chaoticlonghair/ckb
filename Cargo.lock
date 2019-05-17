@@ -702,6 +702,7 @@ dependencies = [
 name = "ckb-shared"
 version = "0.13.0-pre"
 dependencies = [
+ "bloom-filters 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ckb-chain 0.13.0-pre",
  "ckb-chain-spec 0.13.0-pre",
  "ckb-core 0.13.0-pre",

@@ -22,14 +22,14 @@ use ckb_util::{FnvHashMap, FnvHashSet};
 use ckb_verification::{ContextualTransactionVerifier, TransactionVerifier};
 use dao_utils::calculate_transaction_fee;
 use failure::Error as FailureError;
-use log::{debug, trace};
+use log::{debug, info, trace};
 use lru_cache::LruCache;
 use numext_fixed_hash::H256;
 use numext_fixed_uint::U256;
 use std::cell::{Ref, RefCell};
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ChainState<CS> {
     store: Arc<CS>,
     tip_header: Header,
@@ -92,7 +92,8 @@ impl<CS: ChainStore> ChainState<CS> {
         let proposal_window = consensus.tx_proposal_window();
         let proposal_ids = Self::init_proposal_ids(&store, proposal_window, tip_number);
 
-        let cell_set = Self::init_cell_set(&store, tip_number);
+        let cell_set = Self::init_cell_set(&store, tip_number)
+            .map_err(|e| SharedError::InvalidData(format!("failed to load cell set{:?}", e)))?;
 
         let total_difficulty = store
             .get_block_ext(&tip_header.hash())
@@ -142,7 +143,7 @@ impl<CS: ChainStore> ChainState<CS> {
         proposal_ids
     }
 
-    fn init_cell_set(store: &CS, number: u64) -> CellSet {
+    fn init_cell_set(store: &CS, number: u64) -> Result<CellSet, FailureError> {
         let mut cell_set = CellSet::new();
 
         for n in 0..=number {
@@ -167,7 +168,18 @@ impl<CS: ChainStore> ChainState<CS> {
             }
         }
 
-        cell_set
+        let mut count = 0;
+        info!(target: "chain", "Start: loading alive cells ...");
+        store.traverse_cell_set(|cell_key_bytes| {
+            count += 1;
+            cell_set.insert_raw(cell_key_bytes);
+            if count % 10_000 == 0 {
+                info!(target: "chain", "    loading {} cells ...", count);
+            }
+            Ok(())
+        })?;
+        info!(target: "chain", "Done: total {} alive cells.", count);
+        Ok(cell_set)
     }
 
     pub fn tip_number(&self) -> BlockNumber {
@@ -274,9 +286,12 @@ impl<CS: ChainStore> ChainState<CS> {
             batch.commit()?;
         }
 
+        self.cell_set.delete_cells(&old_dead[..]);
+        self.cell_set.insert_cells(&old_alive[..]);
+        self.cell_set.insert_cells(&new_alive[..]);
+        self.cell_set.delete_cells(&new_dead[..]);
         self.cell_set.update(txo_diff);
-
-        Ok(self.cell_set.count)
+        Ok(self.cell_set.count())
     }
 
     pub fn get_tx_with_cycles_from_pool(

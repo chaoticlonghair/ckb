@@ -10,6 +10,7 @@ use hash::blake2b_256;
 use numext_fixed_hash::{h256, H256};
 use occupied_capacity::{HasOccupiedCapacity, OccupiedCapacity};
 use serde_derive::{Deserialize, Serialize};
+use std::convert::AsRef;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem;
@@ -25,6 +26,35 @@ pub const TX_VERSION: Version = 0;
 // unlocking process of the DAO cell. The hex used here is actually
 // "NERVOSDAOINPUT0001" in hex mode.
 pub const ISSUING_DAO_HASH: H256 = h256!("0x4e4552564f5344414f494e50555430303031");
+
+pub struct CellKey([u8; 36]);
+
+impl CellKey {
+    pub fn calculate(tx_hash: &H256, index: u32) -> Self {
+        let mut key: [u8; 36] = [0; 36];
+        key[..32].copy_from_slice(tx_hash.as_bytes());
+        key[32..36].copy_from_slice(&index.to_le_bytes());
+        CellKey(key)
+    }
+
+    pub fn recover(&self) -> (H256, u32) {
+        Self::deconstruct(&self.0)
+    }
+
+    pub fn deconstruct(bytes: &[u8]) -> (H256, u32) {
+        let hash = H256::from_slice(&bytes[..32]).expect("unreachable");
+        let mut le_bytes = [0u8; 4];
+        le_bytes.copy_from_slice(&bytes[32..36]);
+        let index = u32::from_le_bytes(le_bytes);
+        (hash, index)
+    }
+}
+
+impl AsRef<[u8]> for CellKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Hash, HasOccupiedCapacity)]
 pub struct CellOutPoint {

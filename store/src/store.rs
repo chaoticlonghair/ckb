@@ -15,7 +15,7 @@ use ckb_core::extras::{
     BlockExt, DaoStats, EpochExt, TransactionAddress, DEFAULT_ACCUMULATED_RATE,
 };
 use ckb_core::header::{BlockNumber, Header};
-use ckb_core::transaction::{CellOutPoint, CellOutput, ProposalShortId, Transaction};
+use ckb_core::transaction::{CellKey, CellOutPoint, CellOutput, ProposalShortId, Transaction};
 use ckb_core::uncle::UncleBlock;
 use ckb_core::{Capacity, EpochNumber};
 use ckb_db::{Col, DbBatch, Error, KeyValueDB};
@@ -27,13 +27,6 @@ use std::sync::Mutex;
 
 const META_TIP_HEADER_KEY: &[u8] = b"TIP_HEADER";
 const META_CURRENT_EPOCH_KEY: &[u8] = b"CURRENT_EPOCH";
-
-fn cell_store_key(tx_hash: &H256, index: u32) -> [u8; 36] {
-    let mut key: [u8; 36] = [0; 36];
-    key[..32].copy_from_slice(tx_hash.as_bytes());
-    key[32..36].copy_from_slice(&index.to_le_bytes());
-    key
-}
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Debug)]
 pub struct StoreConfig {
@@ -127,6 +120,10 @@ pub trait ChainStore: Sync + Send {
     fn get_epoch_index(&self, number: EpochNumber) -> Option<H256>;
     // Get epoch index by block hash
     fn get_block_epoch_index(&self, h256: &H256) -> Option<H256>;
+
+    fn traverse_cell_set<F>(&self, callback: F) -> Result<(), Error>
+    where
+        F: FnMut(&[u8]) -> Result<(), Error>;
 }
 
 pub trait StoreBatch {
@@ -351,8 +348,11 @@ impl<T: KeyValueDB> ChainStore for ChainKVStore<T> {
     }
 
     fn get_cell_meta(&self, tx_hash: &H256, index: u32) -> Option<CellMeta> {
-        self.get(COLUMN_CELL_META, &cell_store_key(tx_hash, index))
-            .map(|raw| deserialize(&raw[..]).unwrap())
+        self.get(
+            COLUMN_CELL_META,
+            CellKey::calculate(tx_hash, index).as_ref(),
+        )
+        .map(|raw| deserialize(&raw[..]).unwrap())
     }
 
     fn get_cell_output(&self, tx_hash: &H256, index: u32) -> Option<CellOutput> {
@@ -394,6 +394,13 @@ impl<T: KeyValueDB> ChainStore for ChainKVStore<T> {
                         })
                     })
             })
+    }
+
+    fn traverse_cell_set<F>(&self, callback: F) -> Result<(), Error>
+    where
+        F: FnMut(&[u8]) -> Result<(), Error>,
+    {
+        self.traverse_keys(COLUMN_CELL_SET, callback)
     }
 }
 
@@ -471,7 +478,7 @@ impl<B: DbBatch> StoreBatch for DefaultStoreBatch<B> {
                     tx_hash: tx_hash.to_owned(),
                     index: index as u32,
                 };
-                let store_key = cell_store_key(&tx_hash, index as u32);
+                let store_key = CellKey::calculate(tx_hash, index as u32);
                 let cell_meta = CellMeta {
                     cell_output: None,
                     out_point,
@@ -483,7 +490,7 @@ impl<B: DbBatch> StoreBatch for DefaultStoreBatch<B> {
                     capacity: output.capacity,
                     data_hash: Some(output.data_hash()),
                 };
-                self.insert_serialize(COLUMN_CELL_META, &store_key, &cell_meta)?;
+                self.insert_serialize(COLUMN_CELL_META, store_key.as_ref(), &cell_meta)?;
             }
         }
 
@@ -497,8 +504,8 @@ impl<B: DbBatch> StoreBatch for DefaultStoreBatch<B> {
             let tx_hash = tx.hash();
             self.delete(COLUMN_TRANSACTION_ADDR, tx_hash.as_bytes())?;
             for index in 0..tx.outputs().len() {
-                let store_key = cell_store_key(&tx_hash, index as u32);
-                self.delete(COLUMN_CELL_META, &store_key)?;
+                let store_key = CellKey::calculate(&tx_hash, index as u32);
+                self.delete(COLUMN_CELL_META, store_key.as_ref())?;
             }
         }
         self.delete(COLUMN_INDEX, &block.header().number().to_le_bytes())?;
@@ -534,17 +541,17 @@ impl<B: DbBatch> StoreBatch for DefaultStoreBatch<B> {
 
     fn insert_cell_set(&mut self, records: &[(&H256, u32)]) -> Result<(), Error> {
         for record in records {
-            let store_key = cell_store_key(&record.0, record.1);
-            self.insert_raw(COLUMN_CELL_SET, &store_key, &[])?;
+            let key = CellKey::calculate(record.0, record.1);
+            self.insert_raw(COLUMN_CELL_SET, key.as_ref(), &[])?;
         }
         Ok(())
     }
 
     fn delete_cell_set(&mut self, records: &[(&H256, u32)]) -> Result<(), Error> {
         for record in records {
-            let store_key = cell_store_key(&record.0, record.1);
-            // TODO failed to delete or no such key
-            self.delete(COLUMN_CELL_SET, &store_key)?;
+            let key = CellKey::calculate(record.0, record.1);
+            // TODO failed to delete or no such key?
+            self.delete(COLUMN_CELL_SET, key.as_ref())?;
         }
         Ok(())
     }
