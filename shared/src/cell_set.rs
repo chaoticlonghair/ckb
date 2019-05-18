@@ -49,13 +49,13 @@ impl CellSetDiff {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CellSetOverlay<'a> {
+pub struct ObsoleteCellSetOverlay<'a> {
     origin: &'a FnvHashMap<H256, TransactionMeta>,
     new: FnvHashMap<H256, TransactionMeta>,
     removed: FnvHashSet<H256>,
 }
 
-impl<'a> CellSetOverlay<'a> {
+impl<'a> ObsoleteCellSetOverlay<'a> {
     pub fn get(&self, hash: &H256) -> Option<&TransactionMeta> {
         if self.removed.get(hash).is_some() {
             return None;
@@ -129,7 +129,7 @@ impl CellSet {
         self.filter.contains(&key)
     }
 
-    pub fn new_overlay<'a>(&'a self, diff: &CellSetDiff) -> CellSetOverlay<'a> {
+    pub fn obsolete_new_overlay<'a>(&'a self, diff: &CellSetDiff) -> ObsoleteCellSetOverlay<'a> {
         let mut new = FnvHashMap::default();
         let mut removed = FnvHashSet::default();
 
@@ -170,7 +170,7 @@ impl CellSet {
             }
         }
 
-        CellSetOverlay {
+        ObsoleteCellSetOverlay {
             new,
             removed,
             origin: &self.inner,

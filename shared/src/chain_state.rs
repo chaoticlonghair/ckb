@@ -1,4 +1,4 @@
-use crate::cell_set::{CellSet, CellSetDiff, CellSetOverlay};
+use crate::cell_set::{CellSet, CellSetDiff, ObsoleteCellSetOverlay};
 use crate::error::SharedError;
 use crate::tx_pool::types::{DefectEntry, ProposedEntry};
 use crate::tx_pool::{PoolError, TxPool, TxPoolConfig};
@@ -604,17 +604,17 @@ impl<CS: ChainStore> ChainState<CS> {
         &'a self,
         diff: &CellSetDiff,
         outputs: &'a FnvHashMap<H256, &'a [CellOutput]>,
-    ) -> ChainCellSetOverlay<'a, CS> {
-        ChainCellSetOverlay {
-            overlay: self.cell_set.new_overlay(diff),
+    ) -> ObsoleteChainCellSetOverlay<'a, CS> {
+        ObsoleteChainCellSetOverlay {
+            overlay: self.cell_set.obsolete_new_overlay(diff),
             store: Arc::clone(self.store()),
             outputs,
         }
     }
 }
 
-pub struct ChainCellSetOverlay<'a, CS> {
-    pub(crate) overlay: CellSetOverlay<'a>,
+pub struct ObsoleteChainCellSetOverlay<'a, CS> {
+    pub(crate) overlay: ObsoleteCellSetOverlay<'a>,
     pub(crate) store: Arc<CS>,
     pub(crate) outputs: &'a FnvHashMap<H256, &'a [CellOutput]>,
 }
@@ -670,7 +670,7 @@ impl<CS: ChainStore> HeaderProvider for ChainState<CS> {
     }
 }
 
-impl<'a, CS: ChainStore> CellProvider for ChainCellSetOverlay<'a, CS> {
+impl<'a, CS: ChainStore> CellProvider for ObsoleteChainCellSetOverlay<'a, CS> {
     fn cell(&self, out_point: &OutPoint) -> CellStatus {
         if let Some(cell_out_point) = &out_point.cell {
             match self.overlay.get(&cell_out_point.tx_hash) {
