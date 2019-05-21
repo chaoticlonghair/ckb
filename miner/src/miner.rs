@@ -8,6 +8,7 @@ use failure::Error;
 use jsonrpc_types::{BlockTemplate, CellbaseTemplate};
 use log::{debug, error, info};
 use rand::{thread_rng, Rng};
+use rayon::prelude::*;
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -118,13 +119,18 @@ impl Miner {
     }
 
     fn mine_loop(&self, header: &RawHeader) -> Option<Seal> {
+        let cpu_nums = num_cpus::get() as u64;
         let mut nonce: u64 = thread_rng().gen();
         loop {
             if self.new_work_rx.try_recv().is_ok() {
                 break None;
             }
             debug!(target: "miner", "mining header #{} with nonce {}", header.number(), nonce);
-            if let Some(seal) = self.pow.solve_header(header, nonce) {
+            let seal_opt = (0..cpu_nums)
+                .into_par_iter()
+                .map(|cpu_id| self.pow.solve_header(header, nonce + cpu_id))
+                .find_any(|seal_opt| seal_opt.is_some());
+            if let Some(Some(seal)) = seal_opt {
                 info!(target: "miner", "found seal: {:?}", seal);
                 break Some(seal);
             }
