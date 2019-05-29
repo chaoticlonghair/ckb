@@ -36,7 +36,7 @@ pub use self::block_template::{
 };
 pub use self::blockchain::{
     Block, BlockView, CellInput, CellOutPoint, CellOutput, EpochExt, Header, HeaderView, OutPoint,
-    Script, Seal, Transaction, TransactionView, TransactionWithStatus, TxStatus, UncleBlock,
+    Script, Seal, Since, Transaction, TransactionView, TransactionWithStatus, TxStatus, UncleBlock,
     UncleBlockView, Witness,
 };
 pub use self::bytes::JsonBytes;

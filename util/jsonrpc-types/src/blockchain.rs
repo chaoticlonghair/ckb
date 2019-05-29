@@ -6,12 +6,13 @@ use ckb_core::header::{Header as CoreHeader, HeaderBuilder, Seal as CoreSeal};
 use ckb_core::script::Script as CoreScript;
 use ckb_core::transaction::{
     CellInput as CoreCellInput, CellOutPoint as CoreCellOutPoint, CellOutput as CoreCellOutput,
-    OutPoint as CoreOutPoint, Transaction as CoreTransaction, TransactionBuilder,
-    Witness as CoreWitness,
+    OutPoint as CoreOutPoint, Since as CoreSince, Transaction as CoreTransaction,
+    TransactionBuilder, Witness as CoreWitness,
 };
 use ckb_core::uncle::UncleBlock as CoreUncleBlock;
 use numext_fixed_hash::H256;
 use numext_fixed_uint::U256;
+use serde::Deserialize as _;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
@@ -127,6 +128,64 @@ impl From<OutPoint> for CoreOutPoint {
         CoreOutPoint {
             cell: cell.map(Into::into),
             block_hash,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+pub enum Since {
+    BlockNumber(#[serde(deserialize_with = "Since::validate_value")] u64),
+    EpochNumber(#[serde(deserialize_with = "Since::validate_value")] u64),
+    Timestamp(#[serde(deserialize_with = "Since::validate_value")] u64),
+    NBlocks(#[serde(deserialize_with = "Since::validate_value")] u64),
+    NEpochs(#[serde(deserialize_with = "Since::validate_value")] u64),
+    NSeconds(#[serde(deserialize_with = "Since::validate_value")] u64),
+}
+
+impl Since {
+    fn validate_value<'de, D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let value = u64::deserialize(deserializer)?;
+
+        if CoreSince::check_value(value) {
+            Ok(value)
+        } else {
+            Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Unsigned(value),
+                &"invalid value of since, it is too big",
+            ))
+        }
+    }
+}
+
+impl From<CoreSince> for Since {
+    fn from(core: CoreSince) -> Self {
+        // trust value from core types
+        match core {
+            CoreSince::BlockNumber(value) => Since::BlockNumber(value),
+            CoreSince::EpochNumber(value) => Since::EpochNumber(value),
+            CoreSince::Timestamp(value) => Since::Timestamp(value),
+            CoreSince::NBlocks(value) => Since::NBlocks(value),
+            CoreSince::NEpochs(value) => Since::NEpochs(value),
+            CoreSince::NSeconds(value) => Since::NSeconds(value),
+        }
+    }
+}
+
+impl From<Since> for CoreSince {
+    fn from(json: Since) -> Self {
+        // we should not trust value from users (jsonrpc types)
+        // but we have already test the value (`Since::validate_value(..)`)
+        match json {
+            Since::BlockNumber(value) => CoreSince::BlockNumber(value),
+            Since::EpochNumber(value) => CoreSince::EpochNumber(value),
+            Since::Timestamp(value) => CoreSince::Timestamp(value),
+            Since::NBlocks(value) => CoreSince::NBlocks(value),
+            Since::NEpochs(value) => CoreSince::NEpochs(value),
+            Since::NSeconds(value) => CoreSince::NSeconds(value),
         }
     }
 }

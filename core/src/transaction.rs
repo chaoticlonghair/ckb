@@ -8,7 +8,7 @@ use ckb_util::LowerHexOption;
 use faster_hex::hex_string;
 use hash::blake2b_256;
 use numext_fixed_hash::{h256, H256};
-use occupied_capacity::{HasOccupiedCapacity, OccupiedCapacity};
+use occupied_capacity::{HasOccupiedCapacity, OccupiedCapacity, Result as CapacityResult};
 use serde_derive::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::fmt;
@@ -195,6 +195,41 @@ impl OutPoint {
     pub fn destruct(self) -> (Option<H256>, Option<CellOutPoint>) {
         let OutPoint { block_hash, cell } = self;
         (block_hash, cell)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum Since {
+    BlockNumber(u64),
+    EpochNumber(u64),
+    Timestamp(u64),
+    NBlocks(u64),
+    NEpochs(u64),
+    NSeconds(u64),
+}
+
+// Basic Configuration
+const SINCE_FLAGS_LENGTH: usize = 8;
+// Derived Configuration
+const SINCE_VALUE_LENGTH: usize = 64 - SINCE_FLAGS_LENGTH;
+const SINCE_VALUE_MASK: u64 = (1 << SINCE_VALUE_LENGTH) - 1;
+
+impl Since {
+    pub fn check_value(value_unchecked: u64) -> bool {
+        let value = value_unchecked & SINCE_VALUE_MASK;
+        value == value_unchecked
+    }
+}
+
+impl Default for Since {
+    fn default() -> Self {
+        Since::BlockNumber(0)
+    }
+}
+
+impl OccupiedCapacity for Since {
+    fn occupied_capacity(&self) -> CapacityResult<Capacity> {
+        Capacity::bytes(mem::size_of::<u64>())
     }
 }
 
