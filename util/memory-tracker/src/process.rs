@@ -1,11 +1,17 @@
 use std::{sync, thread, time};
 
-use ckb_logger::{debug, error, info};
+use ckb_logger::{debug, error, info, trace};
+use crossbeam_channel::{select, unbounded};
 use futures::executor::block_on;
 use heim::units::information::byte;
 use jemalloc_ctl::{epoch, stats};
 
-use crate::{rocksdb::TrackRocksDBMemory, utils::HumanReadableSize};
+use crate::{
+    collections,
+    jemalloc::JeMallocMemoryStatistics,
+    rocksdb::TrackRocksDBMemory,
+    utils::{HumanReadableSize, PropertyValue},
+};
 
 macro_rules! je_mib {
     ($key:ty) => {
@@ -20,11 +26,16 @@ macro_rules! je_mib {
 
 macro_rules! mib_read {
     ($mib:ident) => {
-        if let Ok(value) = $mib.read() {
-            HumanReadableSize::from(value as u64)
-        } else {
-            error!("failed to read jemalloc stats for {}", stringify!($mib));
-            return;
+        match $mib.read() {
+            Ok(value) => PropertyValue::Value(value as u64),
+            Err(err) => {
+                let error = format!(
+                    "failed to read jemalloc stats for {}: {}",
+                    stringify!($mib),
+                    err
+                );
+                PropertyValue::Error(error)
+            }
         }
     };
 }
@@ -36,8 +47,13 @@ pub fn track_current_process<Tracker: 'static + TrackRocksDBMemory + Sync + Send
     if interval == 0 {
         info!("track current process: disable");
     } else {
-        info!("track current process: enable");
-        let wait_secs = time::Duration::from_secs(interval);
+        info!(
+            "track current process: enable (interval: {} seconds)",
+            interval
+        );
+        crate::set_interval(interval);
+        let (sender, receiver) = unbounded();
+        collections::CONTROL_HANDLE.write().replace(sender);
 
         let je_epoch = je_mib!(epoch);
         // Bytes allocated by the application.
@@ -57,81 +73,66 @@ pub fn track_current_process<Tracker: 'static + TrackRocksDBMemory + Sync + Send
         if let Err(err) = thread::Builder::new()
             .name("MemoryTracker".to_string())
             .spawn(move || {
+                trace!("MemoryTracker is running ...");
                 if let Ok(process) = block_on(heim::process::current()) {
                     let pid = process.pid();
+                    let mut now = time::Instant::now();
                     loop {
-                        if je_epoch.advance().is_err() {
-                            error!("failed to refresh the jemalloc stats");
-                            return;
-                        }
-                        if let Ok(memory) = block_on(process.memory()) {
-                            // Resident set size, amount of non-swapped physical memory.
-                            let rss: HumanReadableSize = memory.rss().get::<byte>().into();
-                            // Virtual memory size, total amount of memory.
-                            let virt: HumanReadableSize = memory.vms().get::<byte>().into();
+                        if now.elapsed().as_secs() >= interval {
+                            now = time::Instant::now();
+                            if je_epoch.advance().is_err() {
+                                error!("failed to refresh the jemalloc stats");
+                                return;
+                            }
+                            if let Ok(memory) = block_on(process.memory()) {
+                                // Resident set size, amount of non-swapped physical memory.
+                                let rss: HumanReadableSize = memory.rss().get::<byte>().into();
+                                // Virtual memory size, total amount of memory.
+                                let virt: HumanReadableSize = memory.vms().get::<byte>().into();
 
-                            let allocated = mib_read!(allocated);
-                            let resident = mib_read!(resident);
-                            let active = mib_read!(active);
-                            let mapped = mib_read!(mapped);
-                            let retained = mib_read!(retained);
-                            let metadata = mib_read!(metadata);
+                                let jemalloc_stats = JeMallocMemoryStatistics {
+                                    allocated: mib_read!(allocated),
+                                    resident: mib_read!(resident),
+                                    active: mib_read!(active),
+                                    mapped: mib_read!(mapped),
+                                    retained: mib_read!(retained),
+                                    metadata: mib_read!(metadata),
+                                };
 
-                            if let Some(tracker) = tracker_opt.clone() {
-                                let stats = tracker.gather_memory_stats();
-                                debug!(
-                                    "CurrentProcess {{ \
-                                        pid: {}, rss: {}, virt: {}, \
-                                        Jemalloc: {{ \
-                                            allocated: {}, resident: {}, \
-                                            active: {}, mapped: {}, retained: {}, \
-                                            metadata: {} }}, \
-                                        RocksDB: {{ \
-                                            total: {}, cache: {}, readers: {}, \
-                                            memtables: {}, pinned: {}, \
-                                            cache-capacity: {} \
-                                        }} \
-                                    }}",
-                                    pid,
-                                    rss,
-                                    virt,
-                                    allocated,
-                                    resident,
-                                    active,
-                                    mapped,
-                                    retained,
-                                    metadata,
-                                    stats.total_memory,
-                                    stats.block_cache_usage,
-                                    stats.estimate_table_readers_mem,
-                                    stats.cur_size_all_mem_tables,
-                                    stats.block_cache_pinned_usage,
-                                    stats.block_cache_capacity,
-                                );
+                                if let Some(tracker) = tracker_opt.clone() {
+                                    let rocksdb_stats = tracker.gather_memory_stats();
+                                    debug!(
+                                        "CurrentProcess {{ \
+                                                pid: {}, rss: {}, virt: {}, \
+                                                allocator: {}, database: {}
+                                            }}",
+                                        pid, rss, virt, jemalloc_stats, rocksdb_stats,
+                                    );
+                                } else {
+                                    debug!(
+                                        "CurrentProcess {{ \
+                                                pid: {}, rss: {}, virt: {}, \
+                                                allocator: {}
+                                            }}",
+                                        pid, rss, virt, jemalloc_stats
+                                    );
+                                }
                             } else {
-                                debug!(
-                                    "CurrentProcess {{ \
-                                        pid: {}, rss: {}, virt: {}, \
-                                        Jemalloc: {{ \
-                                            allocated: {}, resident: {}, \
-                                            active: {}, mapped: {}, retained: {}, \
-                                            metadata: {} }} \
-                                    }}",
-                                    pid,
-                                    rss,
-                                    virt,
-                                    allocated,
-                                    resident,
-                                    active,
-                                    mapped,
-                                    retained,
-                                    metadata,
+                                error!(
+                                    "failed to fetch the memory information about current process"
                                 );
                             }
-                        } else {
-                            error!("failed to fetch the memory information about current process");
+                            collections::track_collections();
                         }
-                        thread::sleep(wait_secs);
+                        select! {
+                            recv(receiver) -> item => {
+                                if let Ok((tag, record)) = item {
+                                    collections::STATISTICS.write().insert(tag, record);
+                                }
+                            }
+                            default(time::Duration::from_secs(interval)) => {
+                            }
+                        }
                     }
                 } else {
                     error!("failed to track the currently running program");

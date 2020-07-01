@@ -8,6 +8,9 @@ license = "MIT"
 [dependencies]
 ckb-logger = { path = "../logger" }
 ckb-db = { path = "../../db" }
+ckb-util = { path = "../../util" }
+lazy_static = "1.4"
+crossbeam-channel = "0.3"
 
 # TODO Why don't disable this crate by "target.*" in the crates which are dependent on this crate?
 #

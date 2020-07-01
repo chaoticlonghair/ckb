@@ -29,7 +29,7 @@ impl From<u64> for HumanReadableSize {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum PropertyValue<T> {
     Value(T),
     Null,
@@ -43,6 +43,12 @@ impl fmt::Display for PropertyValue<u64> {
             Self::Null => write!(f, "null"),
             Self::Error(_) => write!(f, "err"),
         }
+    }
+}
+
+impl fmt::Debug for PropertyValue<u64> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self, f)
     }
 }
 
