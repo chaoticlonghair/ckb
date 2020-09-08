@@ -320,6 +320,7 @@ version = "0.36.0-pre"
 dependencies = [
  "ckb-build-info",
  "ckb-chain-spec",
+ "ckb-debug-console-config",
  "ckb-fee-estimator",
  "ckb-jsonrpc-types",
  "ckb-logger",
@@ -383,6 +384,7 @@ dependencies = [
  "ckb-chain-iter",
  "ckb-chain-spec",
  "ckb-channel",
+ "ckb-debug-console",
  "ckb-instrument",
  "ckb-jsonrpc-types",
  "ckb-logger",
@@ -532,6 +534,37 @@ dependencies = [
  "ckb-error",
  "ckb-logger",
  "tempfile",
+]
+
+[[package]]
+name = "ckb-debug-console"
+version = "0.36.0-pre"
+dependencies = [
+ "ckb-async-runtime",
+ "ckb-channel",
+ "ckb-debug-console-common",
+ "ckb-debug-console-config",
+ "ckb-logger",
+ "ckb-stop-handler",
+ "ckb-util",
+ "lazy_static",
+ "thiserror",
+ "tokio 0.2.22",
+]
+
+[[package]]
+name = "ckb-debug-console-common"
+version = "0.36.0-pre"
+dependencies = [
+ "thiserror",
+ "tokio 0.2.22",
+]
+
+[[package]]
+name = "ckb-debug-console-config"
+version = "0.36.0-pre"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
