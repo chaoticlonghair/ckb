@@ -541,14 +541,12 @@ name = "ckb-debug-console"
 version = "0.36.0-pre"
 dependencies = [
  "ckb-async-runtime",
- "ckb-channel",
  "ckb-debug-console-common",
  "ckb-debug-console-config",
  "ckb-logger",
  "ckb-stop-handler",
  "ckb-util",
  "lazy_static",
- "thiserror",
  "tokio 0.2.22",
 ]
 
@@ -556,6 +554,7 @@ dependencies = [
 name = "ckb-debug-console-common"
 version = "0.36.0-pre"
 dependencies = [
+ "handwritten-json",
  "thiserror",
  "tokio 0.2.22",
 ]
@@ -1159,6 +1158,7 @@ dependencies = [
  "ckb-async-runtime",
  "ckb-chain-spec",
  "ckb-dao",
+ "ckb-debug-console-common",
  "ckb-error",
  "ckb-fee-estimator",
  "ckb-jsonrpc-types",
@@ -2026,6 +2026,15 @@ dependencies = [
  "tokio 0.2.22",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "handwritten-json"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1db15d8d48f3a1c8e609cb195afacb2b2270626b7a3974ec76ae42910b98bfed"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
