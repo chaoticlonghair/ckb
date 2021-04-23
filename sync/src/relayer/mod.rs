@@ -144,7 +144,8 @@ impl Relayer {
                 TransactionHashesProcess::new(reader, self, peer).execute()
             }
             packed::RelayMessageUnionReader::GetRelayTransactions(reader) => {
-                GetTransactionsProcess::new(reader, self, nc, peer).execute()
+                //GetTransactionsProcess::new(reader, self, nc, peer).execute()
+                Status::ok()
             }
             packed::RelayMessageUnionReader::GetBlockTransactions(reader) => {
                 GetBlockTransactionsProcess::new(reader, self, nc, peer).execute()
@@ -585,50 +586,7 @@ impl Relayer {
 
     /// Send bulk of tx hashes to selected peers
     pub fn send_bulk_of_tx_hashes(&self, nc: &dyn CKBProtocolContext) {
-        let connected_peers = nc.connected_peers();
-        if connected_peers.is_empty() {
-            return;
-        }
-        let mut selected: HashMap<PeerIndex, Vec<Byte32>> = HashMap::default();
-        {
-            let peer_tx_hashes = self.shared.state().take_tx_hashes();
-            let mut known_txs = self.shared.state().known_txs();
-
-            for (peer_index, tx_hashes) in peer_tx_hashes.into_iter() {
-                for tx_hash in tx_hashes {
-                    for &peer in connected_peers
-                        .iter()
-                        .filter(|&target_peer| {
-                            known_txs.insert(*target_peer, tx_hash.clone())
-                                && (peer_index != *target_peer)
-                        })
-                        .take(MAX_RELAY_PEERS)
-                    {
-                        let hashes = selected
-                            .entry(peer)
-                            .or_insert_with(|| Vec::with_capacity(MAX_RELAY_TXS_NUM_PER_BATCH));
-                        if hashes.len() < MAX_RELAY_TXS_NUM_PER_BATCH {
-                            hashes.push(tx_hash.clone());
-                        }
-                    }
-                }
-            }
-        };
-
-        for (peer, hashes) in selected {
-            let content = packed::RelayTransactionHashes::new_builder()
-                .tx_hashes(hashes.pack())
-                .build();
-            let message = packed::RelayMessage::new_builder().set(content).build();
-
-            if let Err(err) = nc.filter_broadcast(TargetSession::Single(peer), message.as_bytes()) {
-                debug_target!(
-                    crate::LOG_TARGET_RELAY,
-                    "relayer send TransactionHashes error: {:?}",
-                    err,
-                );
-            }
-        }
+        return;
     }
 }
 

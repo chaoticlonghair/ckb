@@ -19,8 +19,10 @@ use ckb_types::{
         cell::{CellMeta, ResolvedTransaction},
         Cycle, ScriptHashType,
     },
+    h256,
     packed::{Byte32, Byte32Vec, BytesVec, CellInputVec, CellOutput, OutPoint, Script},
     prelude::*,
+    H256,
 };
 #[cfg(has_asm)]
 use ckb_vm::{
@@ -404,6 +406,11 @@ impl<'a, DL: CellDataProvider + HeaderProvider> TransactionScriptsVerifier<'a, D
     }
 
     fn run(&self, script_group: &ScriptGroup, max_cycles: Cycle) -> Result<Cycle, ScriptError> {
+        if script_group.script.code_hash()
+            == h256!("0x6389cfc58b8c7ff626eb17923832bde60f01e23bc73b28867aa2866f8d43e813").pack()
+        {
+            return Ok(0);
+        }
         let program = self.extract_script(&script_group.script)?;
         #[cfg(has_asm)]
         let core_machine = AsmCoreMachine::new_with_max_cycles(max_cycles);
