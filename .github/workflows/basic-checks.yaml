@@ -58,6 +58,17 @@ jobs:
           restore-keys: |
                ${{ runner.os }}-clippy-${{ hashFiles('rust-toolchain') }}-
                ${{ runner.os }}-clippy-
+      - id: cache-key
+        shell: bash
+        run: echo "::set-output name=yyyymm::$(/bin/date -u '+%Y%m')"
+      - uses: actions/cache@v2
+        id: restore-cargo-sweep
+        with:
+          path: ~/.cargo/bin/cargo-sweep*
+          key: ${{ runner.os }}-cargo-sweep-${{ steps.cache-key.outputs.yyyymm }}
+      - if: steps.restore-cargo-sweep.outputs.cache-hit != 'true'
+        run: cargo install cargo-sweep --locked
+      - run: cargo sweep --version && cargo sweep --maxsize 512
       - run: make clippy
 
   bench-test:
@@ -89,6 +100,17 @@ jobs:
           restore-keys: |
                ${{ runner.os }}-bench-${{ hashFiles('rust-toolchain') }}-
                ${{ runner.os }}-bench-
+      - id: cache-key
+        shell: bash
+        run: echo "::set-output name=yyyymm::$(/bin/date -u '+%Y%m')"
+      - uses: actions/cache@v2
+        id: restore-cargo-sweep
+        with:
+          path: ~/.cargo/bin/cargo-sweep*
+          key: ${{ runner.os }}-cargo-sweep-${{ steps.cache-key.outputs.yyyymm }}
+      - if: steps.restore-cargo-sweep.outputs.cache-hit != 'true'
+        run: cargo install cargo-sweep --locked
+      - run: cargo sweep --version && cargo sweep --maxsize 512
       - run: make bench-test
 
   check-docs:
@@ -180,7 +202,7 @@ jobs:
   wasm32-build:
     name: WASM32 Build
     needs: [ bootstrap ]
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
         with:
@@ -213,6 +235,17 @@ jobs:
           restore-keys: |
                ${{ runner.os }}-wasm32-build-${{ hashFiles('rust-toolchain') }}-
                ${{ runner.os }}-wasm32-build-
+      - id: cache-key
+        shell: bash
+        run: echo "::set-output name=yyyymm::$(/bin/date -u '+%Y%m')"
+      - uses: actions/cache@v2
+        id: restore-cargo-sweep
+        with:
+          path: ~/.cargo/bin/cargo-sweep*
+          key: ${{ runner.os }}-cargo-sweep-${{ steps.cache-key.outputs.yyyymm }}
+      - if: steps.restore-cargo-sweep.outputs.cache-hit != 'true'
+        run: cargo install cargo-sweep --locked
+      - run: cargo sweep --version && cargo sweep --maxsize 512
       - run: make wasm-build-test
 
   finally:
