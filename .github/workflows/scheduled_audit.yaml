@@ -1,0 +1,24 @@
+name: Security Audit
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+
+      - id: cache-key
+        shell: bash
+        run: echo "::set-output name=yyyymm::$(/bin/date -u '+%Y%m')"
+
+      - uses: actions/cache@v2
+        id: restore-cargo-audit
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ steps.cache-key.outputs.yyyymm }}
+
+      - uses: actions/checkout@v1
+
+      - uses: yangby-cryptape/cargo-audit-check-action@customized-for-ckb
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
