@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+log_file="run-tests.log"
+
+function exit_func () {
+    local retcode=$?
+    echo "Start Exit Func"
+    touch "${log_file}"
+    local bin_path=
+    case "${OS_TYPE}" in
+        Linux )
+            bin_path=$(grep "^\s\+Running \`.* --nocapture\`$" "${log_file}" \
+                | tail -n 1 | awk -F'`' '{ print $2 }' | awk -F' ' '{ print $1 }')
+            ;;
+        Windows )
+            bin_path=$(grep "Running" "${log_file}" | grep "exe" \
+                | tail -n 1 | awk -F' ' '{ print $2 }' | tr '\\' '/')
+            ;;
+        * )
+            echo "Unknown OS Type ${OS_TYPE}."
+            return
+            ;;
+    esac
+    echo "Bin Path: \"${bin_path}\""
+    if [ -f "${bin_path}" ]; then
+        if [ ${retcode} -ne 0 ]; then
+            echo "Package the Artifact"
+            mkdir -p artifact
+            cp "${bin_path}" artifact/
+            tar -czvf artifact.tgz artifact
+        fi
+    fi
+}
+
+trap exit_func EXIT
+
+function main () {
+    for (( i=0; i<400; i=i+1 )); do
+        cargo test --color never  -p ckb-chain -- --nocapture 2>&1 | tee "${log_file}"
+    done
+}
+
+main "$@"

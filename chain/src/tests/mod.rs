@@ -12,3 +12,15 @@ mod truncate;
 mod txs_verify_cache;
 mod uncle;
 mod util;
+
+// Unit Tests will be started in alphabetic order.
+// We want this function to be the first.
+#[test]
+fn aaa_dummy_test() {
+    use std::env;
+    const MINIDUMP_UPLOAD_URL: &str = "MINIDUMP_UPLOAD_URL";
+    if let Ok(url) = env::var(MINIDUMP_UPLOAD_URL) {
+        let started = crashpad::start_crashpad(None, None, &url).unwrap_or(false);
+        eprintln!("Crashpad: {}", started);
+    }
+}
