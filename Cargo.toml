@@ -16,6 +16,7 @@ ckb-build-info = { path = "util/build-info", version = "= 0.100.0-pre" }
 [dependencies]
 ckb-build-info = { path = "util/build-info", version = "= 0.100.0-pre" }
 ckb-bin = { path = "ckb-bin", version = "= 0.100.0-pre" }
+crashpad = { version = "0.1.2", features = ["with-precompiled"] }
 
 [dev-dependencies]
 

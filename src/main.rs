@@ -7,6 +7,16 @@ use ckb_build_info::Version;
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() {
+    {
+        use std::{env, path::Path};
+        let mut started = false;
+        const MINIDUMP_UPLOAD_URL: &str = "MINIDUMP_UPLOAD_URL";
+        if let Ok(url) = env::var(MINIDUMP_UPLOAD_URL) {
+            let cache_dir = Path::new("/tmp/crashpad_cache").to_path_buf();
+            started = crashpad::start_crashpad(None, Some(cache_dir), &url).unwrap_or(false);
+        }
+        eprintln!("Crashpad: {}", started);
+    }
     let version = get_version();
     if let Some(exit_code) = run_app(version).err() {
         ::std::process::exit(exit_code.into());
