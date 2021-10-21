@@ -20,6 +20,8 @@ pub use crate::error::{
 };
 pub use crate::genesis_verifier::GenesisVerifier;
 pub use crate::header_verifier::HeaderVerifier;
+#[cfg(feature = "mock")]
+pub use crate::transaction_verifier::MockedTxsVerifiedResult;
 pub use crate::transaction_verifier::{
     ContextualTransactionVerifier, ContextualWithoutScriptTransactionVerifier,
     NonContextualTransactionVerifier, ScriptVerifier, Since, SinceMetric,

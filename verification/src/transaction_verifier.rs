@@ -16,8 +16,55 @@ use ckb_types::{
     packed::Byte32,
     prelude::*,
 };
-use std::collections::HashSet;
+#[cfg(feature = "mock")]
+use ckb_util::RwLock;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+#[cfg(feature = "mock")]
+use std::sync::Arc;
+
+#[cfg(feature = "mock")]
+lazy_static::lazy_static! {
+    static ref TXS_VERIFIED_RESULT: Arc<RwLock<MockedTxsVerifiedResult>> = MockedTxsVerifiedResult::init();
+}
+
+pub struct MockedTxsVerifiedResult {
+    time_relative: HashMap<Byte32, Result<(), Error>>,
+    non_contextual: HashMap<Byte32, Result<(), Error>>,
+    contextual: HashMap<Byte32, Result<Completed, Error>>,
+}
+
+impl MockedTxsVerifiedResult {
+    fn init() -> Arc<RwLock<Self>> {
+        let result = Self {
+            time_relative: HashMap::default(),
+            contextual: HashMap::default(),
+            non_contextual: HashMap::default(),
+        };
+        Arc::new(RwLock::new(result))
+    }
+
+    pub fn mock_time_relative(tx_hash: Byte32, result: Result<(), Error>) {
+        TXS_VERIFIED_RESULT
+            .write()
+            .time_relative
+            .insert(tx_hash, result);
+    }
+
+    pub fn mock_non_contextual(tx_hash: Byte32, result: Result<(), Error>) {
+        TXS_VERIFIED_RESULT
+            .write()
+            .non_contextual
+            .insert(tx_hash, result);
+    }
+
+    pub fn mock_contextual(tx_hash: Byte32, result: Result<Completed, Error>) {
+        TXS_VERIFIED_RESULT
+            .write()
+            .contextual
+            .insert(tx_hash, result);
+    }
+}
 
 /// The time-related TX verification
 ///
@@ -27,6 +74,8 @@ use std::convert::TryInto;
 pub struct TimeRelativeTransactionVerifier<'a, M> {
     pub(crate) maturity: MaturityVerifier<'a>,
     pub(crate) since: SinceVerifier<'a, M>,
+    #[cfg(feature = "mock")]
+    tx_hash: Byte32,
 }
 
 impl<'a, DL: HeaderProvider> TimeRelativeTransactionVerifier<'a, DL> {
@@ -40,14 +89,27 @@ impl<'a, DL: HeaderProvider> TimeRelativeTransactionVerifier<'a, DL> {
         TimeRelativeTransactionVerifier {
             maturity: MaturityVerifier::new(&rtx, tx_env.epoch(), consensus.cellbase_maturity()),
             since: SinceVerifier::new(rtx, consensus, data_loader, tx_env),
+            #[cfg(feature = "mock")]
+            tx_hash: rtx.transaction.hash(),
         }
     }
 
     /// Perform time-related verification
+    #[cfg(not(feature = "mock"))]
     pub fn verify(&self) -> Result<(), Error> {
         self.maturity.verify()?;
         self.since.verify()?;
         Ok(())
+    }
+
+    #[cfg(feature = "mock")]
+    pub fn verify(&self) -> Result<(), Error> {
+        TXS_VERIFIED_RESULT
+            .read()
+            .time_relative
+            .get(&self.tx_hash)
+            .cloned()
+            .unwrap_or(Ok(()))
     }
 }
 
@@ -66,6 +128,8 @@ pub struct NonContextualTransactionVerifier<'a> {
     pub(crate) empty: EmptyVerifier<'a>,
     pub(crate) duplicate_deps: DuplicateDepsVerifier<'a>,
     pub(crate) outputs_data_verifier: OutputsDataVerifier<'a>,
+    #[cfg(feature = "mock")]
+    tx_hash: Byte32,
 }
 
 impl<'a> NonContextualTransactionVerifier<'a> {
@@ -77,10 +141,13 @@ impl<'a> NonContextualTransactionVerifier<'a> {
             empty: EmptyVerifier::new(tx),
             duplicate_deps: DuplicateDepsVerifier::new(tx),
             outputs_data_verifier: OutputsDataVerifier::new(tx),
+            #[cfg(feature = "mock")]
+            tx_hash: tx.hash(),
         }
     }
 
     /// Perform context-independent verification
+    #[cfg(not(feature = "mock"))]
     pub fn verify(&self) -> Result<(), Error> {
         self.version.verify()?;
         self.size.verify()?;
@@ -88,6 +155,16 @@ impl<'a> NonContextualTransactionVerifier<'a> {
         self.duplicate_deps.verify()?;
         self.outputs_data_verifier.verify()?;
         Ok(())
+    }
+
+    #[cfg(feature = "mock")]
+    pub fn verify(&self) -> Result<(), Error> {
+        TXS_VERIFIED_RESULT
+            .read()
+            .non_contextual
+            .get(&self.tx_hash)
+            .cloned()
+            .unwrap_or(Ok(()))
     }
 }
 
@@ -105,6 +182,8 @@ pub struct ContextualTransactionVerifier<'a, DL> {
     pub(crate) capacity: CapacityVerifier<'a>,
     pub(crate) script: ScriptVerifier<'a, DL>,
     pub(crate) fee_calculator: FeeCalculator<'a, DL>,
+    #[cfg(feature = "mock")]
+    tx_hash: Byte32,
 }
 
 impl<'a, DL> ContextualTransactionVerifier<'a, DL>
@@ -129,6 +208,8 @@ where
             script: ScriptVerifier::new(rtx, consensus, data_loader, tx_env),
             capacity: CapacityVerifier::new(rtx, consensus.dao_type_hash()),
             fee_calculator: FeeCalculator::new(rtx, consensus, data_loader),
+            #[cfg(feature = "mock")]
+            tx_hash: rtx.transaction.hash(),
         }
     }
 
@@ -147,6 +228,7 @@ where
     /// Perform context-dependent verification, return a `Result` to `CacheEntry`
     ///
     /// skip script verify will result in the return value cycle always is zero
+    #[cfg(not(feature = "mock"))]
     pub fn verify(&self, max_cycles: Cycle, skip_script_verify: bool) -> Result<Completed, Error> {
         let timer = Timer::start();
         self.compatible.verify()?;
@@ -160,6 +242,22 @@ where
         let fee = self.fee_calculator.transaction_fee()?;
         metrics!(timing, "ckb.contextual_verified_tx", timer.stop());
         Ok(Completed { cycles, fee })
+    }
+
+    #[cfg(feature = "mock")]
+    pub fn verify(&self, _: Cycle, _: bool) -> Result<Completed, Error> {
+        use ckb_types::core::capacity_bytes;
+        TXS_VERIFIED_RESULT
+            .read()
+            .contextual
+            .get(&self.tx_hash)
+            .cloned()
+            .unwrap_or_else(|| {
+                Ok(Completed {
+                    cycles: 0,
+                    fee: capacity_bytes!(0),
+                })
+            })
     }
 
     /// Perform complete a suspend context-dependent verification, return a `Result` to `CacheEntry`

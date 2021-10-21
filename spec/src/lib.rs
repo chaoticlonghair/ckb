@@ -11,8 +11,8 @@
 // details https://docs.rs/toml/0.5.0/toml/ser/index.html
 
 use crate::consensus::{
-    build_genesis_dao_data, build_genesis_epoch_ext, Consensus, ConsensusBuilder,
-    SATOSHI_CELL_OCCUPIED_RATIO, SATOSHI_PUBKEY_HASH, TYPE_ID_CODE_HASH,
+    build_genesis_dao_data, Consensus, ConsensusBuilder, SATOSHI_CELL_OCCUPIED_RATIO,
+    SATOSHI_PUBKEY_HASH, TYPE_ID_CODE_HASH,
 };
 use ckb_constant::hardfork::{mainnet, testnet};
 use ckb_crypto::secp::Privkey;
@@ -41,6 +41,7 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
+pub use consensus::build_genesis_epoch_ext;
 pub use error::SpecError;
 pub use hardfork::HardForkConfig;
 

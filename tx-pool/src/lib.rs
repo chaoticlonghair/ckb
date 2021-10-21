@@ -12,6 +12,9 @@ mod process;
 pub mod service;
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 pub use ckb_jsonrpc_types::BlockTemplate;
 pub use component::entry::TxEntry;
 pub use pool::TxPool;
