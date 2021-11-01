@@ -183,7 +183,7 @@ impl HardForkSwitch {
     }
 
     /// Returns a vector of epoch numbers, and there are new features which
-    /// require refresh tx-pool caches will be enabled at those epochs.
+    /// require refresh transactions caches will be enabled at those epochs.
     pub fn script_result_changed_at(&self) -> Vec<EpochNumber> {
         let mut epochs = vec![self.rfc_0032()];
         // In future, there could be more than one epoch,
@@ -192,6 +192,34 @@ impl HardForkSwitch {
         //epochs.dedup();
         epochs.retain(|&x| x != 0);
         epochs
+    }
+
+    /// Inputs a list for blocks, returns true if execution results of scripts could be changed
+    /// during these blocks.
+    ///
+    /// # Notice
+    ///
+    /// This method assumes that the inputs blocks are sorted.
+    pub fn check_if_hardfork_during_blocks(&self, blocks: &[BlockView]) -> bool {
+        if blocks.is_empty() {
+            false
+        } else {
+            // This method assumes that the hardfork epochs are sorted and unique.
+            let hardfork_epochs = self.script_result_changed_at();
+            if hardfork_epochs.is_empty() {
+                false
+            } else {
+                let epoch_first = blocks.front().unwrap().epoch().number();
+                let epoch_next = blocks
+                    .back()
+                    .unwrap()
+                    .epoch()
+                    .minimum_epoch_number_after_n_blocks(1);
+                hardfork_epochs.into_iter().any(|hardfork_epoch| {
+                    epoch_first < hardfork_epoch && hardfork_epoch <= epoch_next
+                })
+            }
+        }
     }
 }
 

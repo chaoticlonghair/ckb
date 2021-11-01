@@ -1026,9 +1026,9 @@ impl TxPoolService {
         let mut attached = LinkedHashSet::default();
         let hardfork_switch = snapshot.consensus().hardfork_switch();
         let hardfork_during_detach =
-            check_if_hardfork_during_blocks(&hardfork_switch, &detached_blocks);
+            hardfork_switch.check_if_hardfork_during_blocks(&detached_blocks);
         let hardfork_during_attach =
-            check_if_hardfork_during_blocks(&hardfork_switch, &attached_blocks);
+            hardfork_switch.check_if_hardfork_during_blocks(&attached_blocks);
         let epoch_of_next_block = snapshot
             .tip_header()
             .epoch()
@@ -1368,34 +1368,6 @@ fn _update_tx_pool_for_reorg(
         if let Err(e) = tx_pool.gap_rtx(cycles, entry.size, entry.rtx.clone()) {
             debug!("Failed to add tx to gap {}, reason: {}", tx_hash, e);
             callbacks.call_reject(tx_pool, &entry, e.clone());
-        }
-    }
-}
-
-// # Notice
-//
-// This method assumes that the inputs blocks are sorted.
-fn check_if_hardfork_during_blocks(
-    hardfork_switch: &HardForkSwitch,
-    blocks: &VecDeque<BlockView>,
-) -> bool {
-    if blocks.is_empty() {
-        false
-    } else {
-        // This method assumes that the hardfork epochs are sorted and unique.
-        let hardfork_epochs = hardfork_switch.script_result_changed_at();
-        if hardfork_epochs.is_empty() {
-            false
-        } else {
-            let epoch_first = blocks.front().unwrap().epoch().number();
-            let epoch_next = blocks
-                .back()
-                .unwrap()
-                .epoch()
-                .minimum_epoch_number_after_n_blocks(1);
-            hardfork_epochs
-                .into_iter()
-                .any(|hardfork_epoch| epoch_first < hardfork_epoch && hardfork_epoch <= epoch_next)
         }
     }
 }

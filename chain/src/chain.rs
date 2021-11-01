@@ -710,7 +710,15 @@ impl ChainService {
         fork: &mut ForkChanges,
         switch: Switch,
     ) -> Result<(), Error> {
-        let txs_verify_cache = self.shared.txs_verify_cache();
+        let hardfork_switch = self.shared.consensus().hardfork_switch();
+        let hardfork_during_attach =
+            hardfork_switch.check_if_hardfork_during_blocks(&fork.attached_blocks());
+
+        let txs_verify_cache = if hardfork_during_attach {
+            Default::default()
+        } else {
+            self.shared.txs_verify_cache()
+        };
 
         let verified_len = fork.verified_len();
         for b in fork.attached_blocks().iter().take(verified_len) {
@@ -741,7 +749,6 @@ impl ChainService {
 
                     let transactions = b.transactions();
                     let resolve_opts = {
-                        let hardfork_switch = self.shared.consensus().hardfork_switch();
                         let epoch_number = b.epoch().number();
                         ResolveOptions::new()
                             .apply_current_features(hardfork_switch, epoch_number)
