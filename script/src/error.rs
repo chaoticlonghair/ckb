@@ -42,6 +42,11 @@ pub enum ScriptError {
     /// Known bugs are detected in transaction script outputs
     #[error("VM Internal Error: {0}")]
     VMInternalError(String),
+
+    #[cfg(feature = "mock")]
+    #[doc(hidden)]
+    #[error("Mock Error: {0}")]
+    Mock(String),
 }
 
 /// Locate the script using the first input index if possible, otherwise the first output index.

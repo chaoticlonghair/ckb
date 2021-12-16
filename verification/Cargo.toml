@@ -26,3 +26,7 @@ ckb-metrics = { path = "../util/metrics", version = "= 0.102.0-pre" }
 [dev-dependencies]
 ckb-test-chain-utils = { path = "../util/test-chain-utils", version = "= 0.102.0-pre" }
 ckb-resource = { path = "../resource", version = "= 0.102.0-pre" }
+
+[features]
+default = []
+mock = ["ckb-script/mock"]

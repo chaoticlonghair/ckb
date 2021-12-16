@@ -1,3 +1,5 @@
+#[cfg(feature = "mock")]
+use crate::mock::MockedScripts;
 #[cfg(test)]
 use crate::syscalls::Pause;
 use crate::{
@@ -947,7 +949,7 @@ impl<'a, DL: CellDataProvider + HeaderProvider> TransactionScriptsVerifier<'a, D
         syscalls
     }
 
-    fn build_machine(
+    pub(crate) fn build_machine(
         &'a self,
         script_group: &'a ScriptGroup,
         max_cycles: Cycle,
@@ -971,6 +973,11 @@ impl<'a, DL: CellDataProvider + HeaderProvider> TransactionScriptsVerifier<'a, D
     }
 
     fn run(&self, script_group: &ScriptGroup, max_cycles: Cycle) -> Result<Cycle, ScriptError> {
+        #[cfg(feature = "mock")]
+        if MockedScripts::contains(&script_group.script) {
+            return MockedScripts::run(self, script_group, max_cycles);
+        }
+
         let program = self.extract_script(&script_group.script)?;
         let mut machine = self.build_machine(script_group, max_cycles)?;
 
@@ -1002,6 +1009,11 @@ impl<'a, DL: CellDataProvider + HeaderProvider> TransactionScriptsVerifier<'a, D
         snap: &Option<(Snapshot, Cycle)>,
     ) -> Result<ChunkState<'a>, ScriptError> {
         let mut machine = self.build_machine(script_group, max_cycles)?;
+
+        #[cfg(feature = "mock")]
+        if MockedScripts::contains(&script_group.script) {
+            return MockedScripts::chunk_run(self, machine, script_group, max_cycles, snap);
+        }
 
         let map_vm_internal_error = |error: VMInternalError| match error {
             VMInternalError::CyclesExceeded => ScriptError::ExceededMaximumCycles(max_cycles),

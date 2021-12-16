@@ -2,6 +2,8 @@
 pub mod cost_model;
 mod error;
 mod ill_transaction_checker;
+#[cfg(feature = "mock")]
+pub mod mock;
 mod syscalls;
 mod type_id;
 mod types;

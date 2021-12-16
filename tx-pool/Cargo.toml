@@ -44,3 +44,4 @@ ckb-hash = { path = "../util/hash", version = "= 0.102.0-pre" }
 default = []
 internal = []
 with_sentry = ["sentry"]
+with_mocked_components = ["ckb-verification/mock"]
