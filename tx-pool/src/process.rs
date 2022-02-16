@@ -20,6 +20,7 @@ use ckb_error::{AnyError, InternalErrorKind};
 use ckb_jsonrpc_types::BlockTemplate;
 use ckb_logger::Level::Trace;
 use ckb_logger::{debug, error, info, log_enabled_target, trace_target};
+use ckb_merkle_mountain_range::leaf_index_to_mmr_size;
 use ckb_network::PeerIndex;
 use ckb_snapshot::Snapshot;
 use ckb_store::ChainStore;
@@ -31,6 +32,7 @@ use ckb_types::{
     },
     packed::{Byte32, Bytes, CellbaseWitness, ProposalShortId, Script},
     prelude::*,
+    utilities::merkle_mountain_range::ChainRootMMR,
 };
 use ckb_util::LinkedHashSet;
 use ckb_verification::{
@@ -434,7 +436,24 @@ impl TxPoolService {
                 .prepare_block_template_uncles(&snapshot, &block_assembler)
                 .await;
 
-            let extension = None;
+            let extension = {
+                let tip_header = snapshot.tip_header();
+                let candidate_number = tip_header.number() + 1;
+                let mmr_activated_number = consensus.mmr_activated_number();
+                if candidate_number > mmr_activated_number {
+                    let mmr_size =
+                        leaf_index_to_mmr_size(candidate_number - mmr_activated_number - 1);
+                    let snapshot_ref: &Snapshot = &snapshot;
+                    let mmr = ChainRootMMR::new(mmr_size, snapshot_ref);
+                    let chain_root = mmr
+                        .get_root()
+                        .map_err(|e| InternalErrorKind::MMR.other(e))?;
+                    let bytes = chain_root.calc_mmr_hash().as_bytes().pack();
+                    Some(bytes)
+                } else {
+                    None
+                }
+            };
 
             let package_txs = self
                 .package_txs_for_block_template(
