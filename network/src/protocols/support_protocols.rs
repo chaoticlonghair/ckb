@@ -51,6 +51,8 @@ pub enum SupportProtocols {
     /// Alert: A protocol reserved by the Nervos Foundation to publish network-wide announcements.
     /// Any information sent from the protocol is verified by multi-signature
     Alert,
+    /// LightClient: A protocol used for light client.
+    LightClient,
 }
 
 impl SupportProtocols {
@@ -67,6 +69,7 @@ impl SupportProtocols {
             SupportProtocols::Time => 102,
             SupportProtocols::RelayV2 => 103,
             SupportProtocols::Alert => 110,
+            SupportProtocols::LightClient => 120,
         }
         .into()
     }
@@ -84,6 +87,7 @@ impl SupportProtocols {
             SupportProtocols::RelayV2 => "/ckb/relay",
             SupportProtocols::Time => "/ckb/tim",
             SupportProtocols::Alert => "/ckb/alt",
+            SupportProtocols::LightClient => "/ckb/lightclient",
         }
         .to_owned()
     }
@@ -108,6 +112,7 @@ impl SupportProtocols {
             SupportProtocols::Time => vec!["1".to_owned(), LASTEST_VERSION.to_owned()],
             SupportProtocols::Alert => vec!["1".to_owned(), LASTEST_VERSION.to_owned()],
             SupportProtocols::RelayV2 => vec![LASTEST_VERSION.to_owned()],
+            SupportProtocols::LightClient => vec![LASTEST_VERSION.to_owned()],
         }
     }
 
@@ -123,6 +128,7 @@ impl SupportProtocols {
             SupportProtocols::Relay | SupportProtocols::RelayV2 => 4 * 1024 * 1024, // 4   MB
             SupportProtocols::Time => 1024,              // 1   KB
             SupportProtocols::Alert => 128 * 1024,       // 128 KB
+            SupportProtocols::LightClient => 2 * 1024 * 1024, // 2 MB
         }
     }
 
@@ -140,7 +146,10 @@ impl SupportProtocols {
                 no_blocking_flag.disable_all();
                 no_blocking_flag
             }
-            SupportProtocols::Sync | SupportProtocols::Relay | SupportProtocols::RelayV2 => {
+            SupportProtocols::Sync
+            | SupportProtocols::Relay
+            | SupportProtocols::RelayV2
+            | SupportProtocols::LightClient => {
                 let mut blocking_recv_flag = BlockingFlag::default();
                 blocking_recv_flag.disable_connected();
                 blocking_recv_flag.disable_disconnected();
