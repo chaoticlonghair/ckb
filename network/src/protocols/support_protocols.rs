@@ -53,6 +53,8 @@ pub enum SupportProtocols {
     Alert,
     /// LightClient: A protocol used for light client.
     LightClient,
+    /// Filter: A protocol used for client side block data filtering.
+    Filter,
 }
 
 impl SupportProtocols {
@@ -70,6 +72,7 @@ impl SupportProtocols {
             SupportProtocols::RelayV2 => 103,
             SupportProtocols::Alert => 110,
             SupportProtocols::LightClient => 120,
+            SupportProtocols::Filter => 121,
         }
         .into()
     }
@@ -88,6 +91,7 @@ impl SupportProtocols {
             SupportProtocols::Time => "/ckb/tim",
             SupportProtocols::Alert => "/ckb/alt",
             SupportProtocols::LightClient => "/ckb/lightclient",
+            SupportProtocols::Filter => "/ckb/filter",
         }
         .to_owned()
     }
@@ -113,6 +117,7 @@ impl SupportProtocols {
             SupportProtocols::Alert => vec!["1".to_owned(), LASTEST_VERSION.to_owned()],
             SupportProtocols::RelayV2 => vec![LASTEST_VERSION.to_owned()],
             SupportProtocols::LightClient => vec![LASTEST_VERSION.to_owned()],
+            SupportProtocols::Filter => vec![LASTEST_VERSION.to_owned()],
         }
     }
 
@@ -129,6 +134,7 @@ impl SupportProtocols {
             SupportProtocols::Time => 1024,              // 1   KB
             SupportProtocols::Alert => 128 * 1024,       // 128 KB
             SupportProtocols::LightClient => 2 * 1024 * 1024, // 2 MB
+            SupportProtocols::Filter => 2 * 1024 * 1024, // 2   MB
         }
     }
 
@@ -150,6 +156,7 @@ impl SupportProtocols {
             | SupportProtocols::Relay
             | SupportProtocols::RelayV2
             | SupportProtocols::LightClient => {
+            | SupportProtocols::Filter => {
                 let mut blocking_recv_flag = BlockingFlag::default();
                 blocking_recv_flag.disable_connected();
                 blocking_recv_flag.disable_disconnected();
