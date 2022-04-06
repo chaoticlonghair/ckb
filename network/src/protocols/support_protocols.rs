@@ -155,7 +155,7 @@ impl SupportProtocols {
             SupportProtocols::Sync
             | SupportProtocols::Relay
             | SupportProtocols::RelayV2
-            | SupportProtocols::LightClient => {
+            | SupportProtocols::LightClient
             | SupportProtocols::Filter => {
                 let mut blocking_recv_flag = BlockingFlag::default();
                 blocking_recv_flag.disable_connected();
