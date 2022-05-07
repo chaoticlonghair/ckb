@@ -20,6 +20,8 @@ pub const CMD_INIT: &str = "init";
 pub const CMD_REPLAY: &str = "replay";
 /// Subcommand `stats`.
 pub const CMD_STATS: &str = "stats";
+/// Subcommand `list-epochs`.
+pub const CMD_LIST_EPOCHS: &str = "list-epochs";
 /// Subcommand `list-hashes`.
 pub const CMD_LIST_HASHES: &str = "list-hashes";
 /// Subcommand `reset-data`.
@@ -140,6 +142,7 @@ pub fn basic_app<'help>() -> Command<'help> {
         .subcommand(init())
         .subcommand(replay())
         .subcommand(stats())
+        .subcommand(list_epochs())
         .subcommand(reset_data())
         .subcommand(peer_id())
         .subcommand(migrate())
@@ -269,6 +272,23 @@ pub(crate) fn stats<'help>() -> Command<'help> {
                 .long(ARG_TO)
                 .takes_value(true)
                 .help("Specifies to block number."),
+        )
+}
+
+fn list_epochs<'help>() -> Command<'help> {
+    Command::new(CMD_LIST_EPOCHS)
+        .about("Lists all epochs information")
+        .arg(
+            Arg::new(ARG_FROM)
+                .long(ARG_FROM)
+                .takes_value(true)
+                .help("Specifies from epoch number."),
+        )
+        .arg(
+            Arg::new(ARG_TO)
+                .long(ARG_TO)
+                .takes_value(true)
+                .help("Specifies to epoch number."),
         )
 }
 

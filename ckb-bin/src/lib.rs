@@ -71,6 +71,7 @@ pub fn run_app(version: Version) -> Result<(), ExitCode> {
         cli::CMD_EXPORT => subcommand::export(setup.export(matches)?, handle),
         cli::CMD_IMPORT => subcommand::import(setup.import(matches)?, handle),
         cli::CMD_STATS => subcommand::stats(setup.stats(matches)?, handle),
+        cli::CMD_LIST_EPOCHS => subcommand::list_epochs(setup.list_epochs(matches)?, handle),
         cli::CMD_RESET_DATA => subcommand::reset_data(setup.reset_data(matches)?),
         cli::CMD_MIGRATE => subcommand::migrate(setup.migrate(matches)?),
         cli::CMD_DB_REPAIR => subcommand::db_repair(setup.db_repair(matches)?),
@@ -89,6 +90,7 @@ fn is_silent_logging(cmd: &str) -> Silent {
         cli::CMD_EXPORT
             | cli::CMD_IMPORT
             | cli::CMD_STATS
+            | cli::CMD_LIST_EPOCHS
             | cli::CMD_MIGRATE
             | cli::CMD_DB_REPAIR
             | cli::CMD_RESET_DATA
