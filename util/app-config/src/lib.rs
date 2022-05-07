@@ -183,6 +183,22 @@ impl Setup {
         })
     }
 
+    /// Executes `ckb list-epochs`.
+    pub fn list_epochs(self, matches: &ArgMatches) -> Result<StatsArgs, ExitCode> {
+        let consensus = self.consensus()?;
+        let config = self.config.into_ckb()?;
+
+        let from = option_value_t!(matches, cli::ARG_FROM, u64)?;
+        let to = option_value_t!(matches, cli::ARG_TO, u64)?;
+
+        Ok(StatsArgs {
+            config,
+            consensus,
+            from,
+            to,
+        })
+    }
+
     /// Executes `ckb import`.
     pub fn import(self, matches: &ArgMatches) -> Result<ImportArgs, ExitCode> {
         let consensus = self.consensus()?;
