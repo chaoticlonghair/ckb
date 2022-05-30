@@ -106,6 +106,3 @@ deadlock_detection = ["ckb-bin/deadlock_detection"]
 with_sentry = ["ckb-bin/with_sentry"]
 with_dns_seeding = ["ckb-bin/with_dns_seeding"]
 profiling = ["tikv-jemallocator/profiling", "ckb-bin/profiling"]
-
-[patch.crates-io]
-ckb-merkle-mountain-range = { git = "https://github.com/yangby-cryptape/merkle-mountain-range", branch="pr/check-before-merge" }

@@ -856,8 +856,9 @@ dependencies = [
 
 [[package]]
 name = "ckb-merkle-mountain-range"
-version = "0.3.2"
-source = "git+https://github.com/yangby-cryptape/merkle-mountain-range?branch=pr/check-before-merge#e488308e89e810f5082cf0e029a34a5b9d15a076"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "530710c310c455ced794feaa13f284c4c5d40ae5d82875392a83da7c5f84a8db"
 dependencies = [
  "cfg-if 0.1.10",
 ]
