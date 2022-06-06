@@ -8,10 +8,40 @@ jobs:
 
   slash-command:
     name: Trigger Execute Command
+    if: github.event.issue.pull_request
     runs-on: ubuntu-latest
     steps:
+      - name: Skip Authority Check
+        if: github.repository_owner != 'nervosnetwork'
+        id: skip_authority_check
+        run: echo "::set-output name=skip::yes"
+      - name: Check If Comment User in the Dev Team
+        if: github.repository_owner == 'nervosnetwork'
+        uses: actions/github-script@v4
+        id: validate_user
+        continue-on-error: true
+        with:
+          result-encoding: string
+          # TODO yangby read:org
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          # TODO yangby team name
+          script: |
+            const response = await github.teams.getMembershipForUserInOrg({
+              org: context.repo.owner,
+              team_slug: '${{ secrets.CKB_DEV_TEAM }}',
+              username: '${{ github.event.comment.user.login }}',
+            })
+            const comment_user = response.data
+            if (comment_user.role === 'member' && comment_user.state === 'active') {
+              return 'passed'
+            } else {
+              return 'failed'
+            }
       - uses: actions/github-script@v4
         id: pull_request_payload
+        if: |
+          steps.skip_authority_check.outputs.skip == 'yes'
+          || steps.validate_user.outputs.result == 'passed'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -21,9 +51,13 @@ jobs:
               pull_number: context.issue.number
             })
       - uses: peter-evans/slash-command-dispatch@v2
+        if: |
+          steps.skip_authority_check.outputs.skip == 'yes'
+          || steps.validate_user.outputs.result == 'passed'
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           commands: execute
           issue-type: pull-request
           static-args: |
             github_sha=${{ toJSON(fromJson(steps.pull_request_payload.outputs.result).data.head.sha) }}
+            github_pull_number=${{ toJSON(fromJson(steps.pull_request_payload.outputs.result).data.number) }}

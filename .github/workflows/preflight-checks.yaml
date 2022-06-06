@@ -23,6 +23,7 @@ jobs:
     name: Check If Workflow is Required
     if: |
       (github.repository_owner != 'nervosnetwork'
+          && github.repository_owner != 'yangby-cryptape'
           && ! contains(github.event.head_commit.message, 'disable github-hosted ci'))
       || contains(github.event.head_commit.message, 'enable github-hosted ci')
     runs-on: ubuntu-latest

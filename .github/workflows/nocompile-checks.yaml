@@ -72,6 +72,28 @@ jobs:
               sha: '${{ github.event.client_payload.github.sha }}',
               target_url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
             })
+      - uses: actions/github-script@v4
+        if: ${{ always() }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: '${{ github.event.client_payload.github.sha }}',
+              body: 'this-is-a-commit-comment'
+            })
+      - uses: actions/github-script@v4
+        if: ${{ always() && github.event.client_payload.github.pull_number }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ github.event.client_payload.github.pull_number }},
+              body: 'this-is-a-pull_request-comment'
+            })
 
   trigger-next-checks:
     name: Trigger Next Checks

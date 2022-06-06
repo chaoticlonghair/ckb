@@ -24,7 +24,8 @@ jobs:
           client-payload: |
             {
               "github": {
-                "sha": "${{ github.event.client_payload.slash_command.args.named.github_sha }}"
+                "sha": "${{ github.event.client_payload.slash_command.args.named.github_sha }}",
+                "pull_number": "${{ github.event.client_payload.slash_command.args.named.github_pull_number }}"
               },
               "env": {
                 "linux_os": "${{ env.linux_os }}",
