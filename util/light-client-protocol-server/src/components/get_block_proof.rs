@@ -220,15 +220,6 @@ impl<'a> GetBlockProofProcess<'a> {
                 let errmsg = "the difficulties should be monotonically increasing";
                 return StatusCode::InvalidRequest.with_context(errmsg);
             }
-            // The maximum difficulty should be less than the difficulty boundary.
-            if difficulties
-                .last()
-                .map(|d| *d <= difficulty_boundary)
-                .unwrap_or(false)
-            {
-                let errmsg = "the difficulty boundary should be greater than all difficulties";
-                return StatusCode::InvalidRequest.with_context(errmsg);
-            }
             // The first difficulty should be greater than the total difficulty before the start block.
             if let Some(start_difficulty) = difficulties.get(0) {
                 if start_block_number > 0 {
@@ -298,7 +289,7 @@ impl<'a> GetBlockProofProcess<'a> {
                     difficulty_boundary = total_difficulty;
                     difficulties = difficulties
                         .into_iter()
-                        .filter(|d| *d >= difficulty_boundary)
+                        .filter(|d| *d < difficulty_boundary)
                         .collect();
                 } else {
                     let errmsg = format!(
