@@ -43,11 +43,11 @@ pub(crate) fn check_tx_fee(
     // Theoretically we cannot use size as weight directly to calculate fee_rate,
     // here min fee rate is used as a cheap check,
     // so we will use size to calculate fee_rate directly
-    let min_fee = tx_pool.config.min_fee_rate.fee(tx_size as u64);
+    let rolling_min_fee_rate = tx_pool.rolling_min_fee_rate();
+    let min_fee = rolling_min_fee_rate.fee(tx_size as u64);
     // reject txs which fee lower than min fee rate
     if fee < min_fee {
-        let reject =
-            Reject::LowFeeRate(tx_pool.config.min_fee_rate, min_fee.as_u64(), fee.as_u64());
+        let reject = Reject::LowFeeRate(rolling_min_fee_rate, min_fee.as_u64(), fee.as_u64());
         ckb_logger::debug!("Reject tx {}", reject);
         return Err(reject);
     }

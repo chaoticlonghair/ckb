@@ -32,6 +32,7 @@ use ckb_verification::{
     cache::{CacheEntry, Completed},
     TxVerifyEnv,
 };
+use std::cmp;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -923,6 +924,8 @@ impl TxPoolService {
             let mut queue = self.verify_queue.write().await;
             queue.remove_txs(attached.iter().map(|tx| tx.proposal_short_id()));
         }
+
+        self.tx_pool.write().await.chain_updated()
     }
 
     async fn enqueue_verify_queue(
@@ -1019,7 +1022,10 @@ impl TxPoolService {
             .fee_estimator
             .estimate_fee_rate(estimate_mode, all_entry_info)
         {
-            Ok(fee_rate) => Ok(fee_rate),
+            Ok(fee_rate) => {
+                let min_fee_rate = self.tx_pool.read().await.rolling_min_fee_rate();
+                Ok(cmp::max(min_fee_rate, fee_rate))
+            }
             Err(err) => {
                 if enable_fallback {
                     let target_blocks =

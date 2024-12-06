@@ -17,6 +17,9 @@ pub struct TxPoolConfig {
     /// txs need to pay larger fee rate than this for RBF
     #[serde(with = "FeeRateDef")]
     pub min_rbf_rate: FeeRate,
+    /// Enable rolling min fee rate and rolling min rbf rate (default: false).
+    #[serde(default)]
+    pub enable_rolling_fee_rate: bool,
     /// tx pool rejects txs that cycles greater than max_tx_verify_cycles
     pub max_tx_verify_cycles: Cycle,
     /// max ancestors size limit for a single tx

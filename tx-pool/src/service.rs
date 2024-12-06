@@ -1042,6 +1042,8 @@ impl TxPoolService {
         let orphan = self.orphan.read().await;
         let verify_queue = self.verify_queue.read().await;
         let tip_header = tx_pool.snapshot.tip_header();
+        let (rolling_min_rbf_rate, rolling_min_fee_rate) =
+            tx_pool.rolling_min_rbf_rate_and_min_fee_rate();
         TxPoolInfo {
             tip_hash: tip_header.hash(),
             tip_number: tip_header.number(),
@@ -1051,7 +1053,10 @@ impl TxPoolService {
             total_tx_size: tx_pool.pool_map.total_tx_size,
             total_tx_cycles: tx_pool.pool_map.total_tx_cycles,
             min_fee_rate: self.tx_pool_config.min_fee_rate,
+            rolling_min_fee_rate,
             min_rbf_rate: self.tx_pool_config.min_rbf_rate,
+            rolling_min_rbf_rate,
+            enable_rolling_fee_rate: self.tx_pool_config.enable_rolling_fee_rate,
             last_txs_updated_at: tx_pool.pool_map.get_max_update_time(),
             tx_size_limit: TRANSACTION_SIZE_LIMIT,
             max_tx_pool_size: self.tx_pool_config.max_tx_pool_size as u64,

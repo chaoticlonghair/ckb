@@ -42,6 +42,12 @@ pub struct TxPoolInfo {
     ///
     /// The unit is Shannons per 1000 bytes transaction serialization size in the block.
     pub min_fee_rate: Uint64,
+    /// Rolling min fee rate.
+    ///
+    /// The minimum fee rate for a transaction to be added to the mempool and be further relayed.
+    /// This is a dynamic value - it changes as the mempool fills up and empties.
+    /// It's always equal to the `min_fee_rate` if `enable_rolling_fee_rate` is false.
+    pub rolling_min_fee_rate: Uint64,
     /// RBF rate threshold.
     ///
     /// The pool reject to replace for transactions which fee rate is below this threshold.
@@ -49,6 +55,13 @@ pub struct TxPoolInfo {
     ///
     /// The unit is Shannons per 1000 bytes transaction serialization size in the block.
     pub min_rbf_rate: Uint64,
+    /// Rolling min RBF rate.
+    ///
+    /// The dynamic minimum RBF rate - it changes as the mempool fills up and empties.
+    /// It's always equal to the `min_rbf_rate` if `enable_rolling_fee_rate` is false.
+    pub rolling_min_rbf_rate: Uint64,
+    /// Whether to rolling the min fee rate and the min RBF rate or not.
+    pub enable_rolling_fee_rate: bool,
     /// Last updated time. This is the Unix timestamp in milliseconds.
     pub last_txs_updated_at: Timestamp,
     /// Limiting transactions to tx_size_limit
@@ -75,7 +88,10 @@ impl From<CoreTxPoolInfo> for TxPoolInfo {
             total_tx_size: (tx_pool_info.total_tx_size as u64).into(),
             total_tx_cycles: tx_pool_info.total_tx_cycles.into(),
             min_fee_rate: tx_pool_info.min_fee_rate.as_u64().into(),
+            rolling_min_fee_rate: tx_pool_info.rolling_min_fee_rate.as_u64().into(),
             min_rbf_rate: tx_pool_info.min_rbf_rate.as_u64().into(),
+            rolling_min_rbf_rate: tx_pool_info.rolling_min_rbf_rate.as_u64().into(),
+            enable_rolling_fee_rate: tx_pool_info.enable_rolling_fee_rate,
             last_txs_updated_at: tx_pool_info.last_txs_updated_at.into(),
             tx_size_limit: tx_pool_info.tx_size_limit.into(),
             max_tx_pool_size: tx_pool_info.max_tx_pool_size.into(),

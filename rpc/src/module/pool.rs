@@ -276,6 +276,7 @@ pub trait PoolRpc {
     ///   "id": 42,
     ///   "jsonrpc": "2.0",
     ///   "result": {
+    ///     "enable_rolling_fee_rate": false,
     ///     "last_txs_updated_at": "0x0",
     ///     "min_fee_rate": "0x3e8",
     ///     "min_rbf_rate": "0x5dc",
@@ -283,6 +284,8 @@ pub trait PoolRpc {
     ///     "orphan": "0x0",
     ///     "pending": "0x1",
     ///     "proposed": "0x0",
+    ///     "rolling_min_fee_rate": "0x3e8",
+    ///     "rolling_min_rbf_rate": "0x5dc",
     ///     "tip_hash": "0xa5f5c85987a15de25661e5a214f2c1449cd803f071acc7999820f25246471f40",
     ///     "tip_number": "0x400",
     ///     "total_tx_cycles": "0x219",

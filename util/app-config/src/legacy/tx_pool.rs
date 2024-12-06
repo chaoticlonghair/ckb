@@ -119,6 +119,7 @@ impl From<TxPoolConfig> for crate::TxPoolConfig {
             max_tx_pool_size,
             min_fee_rate,
             min_rbf_rate,
+            enable_rolling_fee_rate: false,
             max_tx_verify_cycles,
             max_ancestors_count: cmp::max(DEFAULT_MAX_ANCESTORS_COUNT, max_ancestors_count),
             keep_rejected_tx_hashes_days,

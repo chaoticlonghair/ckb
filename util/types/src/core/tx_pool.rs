@@ -340,11 +340,27 @@ pub struct TxPoolInfo {
     /// The unit is Shannons per 1000 bytes transaction serialization size in the block.
     pub min_fee_rate: FeeRate,
 
+    /// Rolling min fee rate.
+    ///
+    /// The minimum fee rate for a transaction to be added to the mempool and be further relayed.
+    /// This is a dynamic value - it changes as the mempool fills up and empties.
+    /// It's always equal to the `min_fee_rate` if `enable_rolling_fee_rate` is false.
+    pub rolling_min_fee_rate: FeeRate,
+
     /// Min RBF rate threshold. The pool reject RBF transactions which fee rate is below this threshold.
     /// if min_rbf_rate > min_fee_rate then RBF is enabled on the node.
     ///
     /// The unit is Shannons per 1000 bytes transaction serialization size in the block.
     pub min_rbf_rate: FeeRate,
+
+    /// Rolling min RBF rate.
+    ///
+    /// The dynamic minimum RBF rate - it changes as the mempool fills up and empties.
+    /// It's always equal to the `min_rbf_rate` if `enable_rolling_fee_rate` is false.
+    pub rolling_min_rbf_rate: FeeRate,
+
+    /// Whether to rolling the min fee rate and the min RBF rate or not.
+    pub enable_rolling_fee_rate: bool,
 
     /// Last updated time. This is the Unix timestamp in milliseconds.
     pub last_txs_updated_at: u64,

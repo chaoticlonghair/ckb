@@ -23,6 +23,7 @@ use ckb_types::{
     },
     packed::{Byte32, ProposalShortId},
 };
+use ckb_util::Mutex;
 use lru::LruCache;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -31,6 +32,9 @@ const COMMITTED_HASH_CACHE_SIZE: usize = 100_000;
 const CONFLICTES_CACHE_SIZE: usize = 10_000;
 const CONFLICTES_INPUTS_CACHE_SIZE: usize = 30_000;
 const MAX_REPLACEMENT_CANDIDATES: usize = 100;
+/// Default incremental fee rate, which sets the minimum fee rate increase for mempool limiting or replacement.
+const DEFAULT_INCREMENTAL_RELAY_FEE: FeeRate = FeeRate::from_u64(1000);
+const ROLLING_FEE_HALFLIFE: u64 = 60 * 60 * 12;
 
 /// Tx-pool implementation
 pub struct TxPool {
@@ -48,6 +52,8 @@ pub struct TxPool {
     pub(crate) conflicts_cache: lru::LruCache<ProposalShortId, TransactionView>,
     // conflicted transaction outputs cache, input -> tx_short_id
     pub(crate) conflicts_outputs_cache: lru::LruCache<OutPoint, ProposalShortId>,
+    // Rolling min fee rate
+    pub(crate) min_fee_rate: Mutex<RollingFeeRate>,
 }
 
 impl TxPool {
@@ -55,6 +61,7 @@ impl TxPool {
     pub fn new(config: TxPoolConfig, snapshot: Arc<Snapshot>) -> TxPool {
         let recent_reject = Self::build_recent_reject(&config);
         let expiry = config.expiry_hours as u64 * 60 * 60 * 1000;
+        let min_fee_rate = RollingFeeRate::new(config.min_fee_rate);
         TxPool {
             pool_map: PoolMap::new(config.max_ancestors_count),
             committed_txs_hash_cache: LruCache::new(COMMITTED_HASH_CACHE_SIZE),
@@ -64,6 +71,7 @@ impl TxPool {
             expiry,
             conflicts_cache: LruCache::new(CONFLICTES_CACHE_SIZE),
             conflicts_outputs_cache: lru::LruCache::new(CONFLICTES_INPUTS_CACHE_SIZE),
+            min_fee_rate: Mutex::new(min_fee_rate),
         }
     }
 
@@ -80,6 +88,43 @@ impl TxPool {
     /// Check whether tx-pool enable RBF
     pub fn enable_rbf(&self) -> bool {
         self.config.min_rbf_rate > self.config.min_fee_rate
+    }
+
+    /// The minimum fee rate for a transaction to be added to the mempool and be further relayed.
+    /// This is a dynamic value - it changes as the mempool fills up and empties.
+    pub fn rolling_min_fee_rate(&self) -> FeeRate {
+        if self.config.enable_rolling_fee_rate {
+            self.min_fee_rate
+                .lock()
+                .get(self.pool_map.total_tx_size, self.config.max_tx_pool_size)
+        } else {
+            self.config.min_fee_rate
+        }
+    }
+
+    /// Set rolling min fee rate directly.
+    pub fn set_rolling_min_fee_rate(&self, fee_rate: FeeRate) {
+        if self.config.enable_rolling_fee_rate {
+            self.min_fee_rate.lock().set(fee_rate)
+        }
+    }
+
+    /// The dynamic minimum RBF rate - it changes as the mempool fills up and empties.
+    /// Also return the rolling min fee rate as a supplement.
+    pub fn rolling_min_rbf_rate_and_min_fee_rate(&self) -> (FeeRate, FeeRate) {
+        if self.config.enable_rolling_fee_rate {
+            let min_fee_rate = self.rolling_min_fee_rate();
+            let value = self
+                .config
+                .min_rbf_rate
+                .as_u64()
+                .saturating_sub(self.config.min_fee_rate.as_u64())
+                .saturating_add(min_fee_rate.as_u64());
+            let min_rbf_rate = FeeRate::from_u64(value);
+            (min_rbf_rate, min_fee_rate)
+        } else {
+            (self.config.min_rbf_rate, self.config.min_fee_rate)
+        }
     }
 
     /// The least required fee rate to allow tx to be replaced
@@ -100,7 +145,10 @@ impl TxPool {
 
     /// min_replace_fee = sum(replaced_txs.fee) + extra_rbf_fee
     fn calculate_min_replace_fee(&self, conflicts: &[&PoolEntry], size: usize) -> Option<Capacity> {
-        let extra_rbf_fee = self.config.min_rbf_rate.fee(size as u64);
+        let extra_rbf_fee = self
+            .rolling_min_rbf_rate_and_min_fee_rate()
+            .0
+            .fee(size as u64);
         // don't account for duplicate txs
         let replaced_fees: HashMap<_, _> = conflicts
             .iter()
@@ -311,9 +359,11 @@ impl TxPool {
                         "Removed by size limit {} timestamp({})",
                         tx_hash, entry.timestamp
                     );
+                    let entry_fee_rate = entry.fee_rate();
+                    self.set_rolling_min_fee_rate(entry_fee_rate);
                     let reject = Reject::Full(format!(
                         "the fee_rate for this transaction is: {}",
-                        entry.fee_rate()
+                        entry_fee_rate
                     ));
                     if let Some(short_id) = current_entry_id {
                         if entry.proposal_short_id() == *short_id {
@@ -566,7 +616,7 @@ impl TxPool {
                 as usize,
             self.snapshot.consensus().max_block_bytes() as usize,
             self.snapshot.consensus().max_block_cycles(),
-            self.config.min_fee_rate,
+            self.rolling_min_fee_rate(),
         );
         Ok(fee_rate)
     }
@@ -732,5 +782,82 @@ impl TxPool {
             warn!("Recent reject database is disabled!");
             None
         }
+    }
+
+    // Update tx pool if the chain (blocks) is updated.
+    pub(crate) fn chain_updated(&mut self) {
+        if self.config.enable_rolling_fee_rate {
+            self.min_fee_rate.lock().chain_updated();
+        }
+    }
+}
+
+/// Rolling fee rate implementation
+pub struct RollingFeeRate {
+    // Last rolling fee rate update timestamp.
+    update_ts: u64,
+    // Block since last rolling fee rate bump.
+    block_since_bump: bool,
+    // Rolling fee rate
+    value: FeeRate,
+}
+
+impl RollingFeeRate {
+    /// Create a new instance.
+    pub fn new(fee_rate: FeeRate) -> Self {
+        let update_ts = ckb_systemtime::unix_time_as_millis();
+        Self {
+            update_ts,
+            block_since_bump: false,
+            value: fee_rate,
+        }
+    }
+
+    /// Return the current fee rate.
+    pub(crate) fn get(&mut self, size: usize, size_limit: usize) -> FeeRate {
+        if !self.block_since_bump || self.value.as_u64() == 0 {
+            return self.value;
+        }
+        let now = ckb_systemtime::unix_time_as_millis();
+        if now > self.update_ts + 10 * 1000 {
+            let mut halflife = ROLLING_FEE_HALFLIFE;
+            if size < size_limit / 4 {
+                halflife /= 4;
+            } else if size < size_limit / 2 {
+                halflife /= 2;
+            }
+
+            self.value = {
+                let x = (now - self.update_ts) as f64 / halflife as f64;
+                let y = self.value.as_u64() as f64 / 2.0f64.powf(x);
+                FeeRate::from_u64(y as u64)
+            };
+
+            self.update_ts = now;
+
+            if self.value.as_u64() < DEFAULT_INCREMENTAL_RELAY_FEE.as_u64() / 2 {
+                self.value = FeeRate::from_u64(0);
+                return self.value;
+            }
+        }
+
+        if self.value > DEFAULT_INCREMENTAL_RELAY_FEE {
+            self.value
+        } else {
+            DEFAULT_INCREMENTAL_RELAY_FEE
+        }
+    }
+
+    /// Set a new fee rate directly.
+    pub(crate) fn set(&mut self, fee_rate: FeeRate) {
+        if fee_rate > self.value {
+            self.value = fee_rate;
+            self.block_since_bump = false;
+        }
+    }
+
+    // Update tx pool if the chain (blocks) is updated.
+    pub(crate) fn chain_updated(&mut self) {
+        self.block_since_bump = true;
     }
 }
